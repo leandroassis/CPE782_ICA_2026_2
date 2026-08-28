@@ -1,0 +1,15 @@
+asset/
+context/
+
+.venv/
+__pycache__/
+*.egg-info/
+docs/
+output/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+todo
+data

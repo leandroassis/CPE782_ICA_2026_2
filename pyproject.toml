@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ica"
+version = "0.1.0"
+description = "Separacao Cega de Fontes via ICA (Infomax / Maxima Verossimilhanca)"
+requires-python = ">=3.12"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "D"]
+# D203/D213: convencoes de docstring mutuamente exclusivas com as demais regras D escolhidas.
+# N803/N806: nomes de matrizes (X, Y, A, B, S) seguem a notacao de ICA_BACKGROUND.md e a
+# convencao do scikit-learn (X maiusculo para matrizes) em vez de snake_case estrito.
+# D401: a heuristica de "modo imperativo" do pydocstyle e especifica do ingles e produz
+# falsos positivos sistematicos em docstrings escritas em portugues.
+ignore = ["D203", "D213", "N803", "N806", "D401"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
