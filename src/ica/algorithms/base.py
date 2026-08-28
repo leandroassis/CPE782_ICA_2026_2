@@ -50,6 +50,11 @@ class ICAAlgorithm(ABC):
     history_ : list of float
         Variacao relativa de B a cada iteracao (para diagnostico/plot de
         convergencia).
+    log_likelihood_history_ : list of float
+        Log-verossimilhanca media -- ``(1/T) log L(B)``, ICA_BACKGROUND.md
+        Secao 3.2 -- calculada a cada iteracao com a matriz B ja
+        atualizada. Cresce (ou se mantem estavel) ao longo das iteracoes
+        quando o algoritmo esta de fato ascendendo a verossimilhanca.
     elapsed_time_ : float or None
         Tempo de execucao de :meth:`fit`, em segundos.
     """
@@ -72,6 +77,7 @@ class ICAAlgorithm(ABC):
         self.converged_: bool | None = None
         self.n_iterations_: int | None = None
         self.history_: list[float] = []
+        self.log_likelihood_history_: list[float] = []
         self.elapsed_time_: float | None = None
 
     def fit(self, X: np.ndarray) -> np.ndarray:
@@ -98,12 +104,14 @@ class ICAAlgorithm(ABC):
 
         B = self._initialize_unmixing_matrix(n_components)
         self.history_ = []
+        self.log_likelihood_history_ = []
         self.converged_ = False
         iteration = 0
 
         for iteration in range(1, self.max_iterations + 1):
             B_new = self._update_step(B, X)
             self.history_.append(self._relative_change(B, B_new))
+            self.log_likelihood_history_.append(self._log_likelihood(B_new, X))
             has_converged = self._has_converged(B, B_new)
             B = B_new
             if has_converged:
@@ -174,6 +182,38 @@ class ICAAlgorithm(ABC):
             ``||B_new - B_old||_F / ||B_old||_F``.
         """
         return float(np.linalg.norm(B_new - B_old) / np.linalg.norm(B_old))
+
+    def _log_likelihood(self, B: np.ndarray, X: np.ndarray) -> float:
+        """Log-verossimilhanca media no ponto ``B`` (ICA_BACKGROUND.md, Secao 3.2).
+
+        Implementa ``(1/T) log L(B) = sum_i E{log p_i(b_i^T x)} +
+        log|det B|``, usando ``self.nonlinearity.log_density`` como a
+        densidade suposta ``p_i``. ``log|det B|`` e calculado via
+        :func:`numpy.linalg.slogdet` por estabilidade numerica.
+
+        Este calculo permanece na propria classe do algoritmo (e nao em
+        ``ica.metrics``) porque precisa da matriz de separacao
+        *intermediaria* a cada iteracao -- disponivel apenas aqui dentro
+        do loop de :meth:`fit`, antes de existir um ``ICAModel`` ajustado
+        sobre o qual uma ``Metric`` pudesse operar. O valor final desta
+        trajetoria e reexposto, sem duplicar a formula, por
+        :class:`~ica.metrics.log_likelihood.LogLikelihood`.
+
+        Parameters
+        ----------
+        B : np.ndarray
+            Matriz de separacao no ponto a avaliar.
+        X : np.ndarray
+            Dados pre-processados, shape ``(n_componentes, n_amostras)``.
+
+        Returns
+        -------
+        float
+            Log-verossimilhanca media em ``B``.
+        """
+        Y = B @ X
+        _, log_abs_det = np.linalg.slogdet(B)
+        return float(np.sum(np.mean(self.nonlinearity.log_density(Y), axis=1)) + log_abs_det)
 
     def _has_converged(self, B_old: np.ndarray, B_new: np.ndarray) -> bool:
         """Verifica se a variacao relativa de B esta abaixo de ``tolerance``.

@@ -57,6 +57,10 @@ class ICAModel:
     history_ : list of float or None
         Historico de convergencia do algoritmo (ver
         :attr:`ICAAlgorithm.history_ <ica.algorithms.base.ICAAlgorithm.history_>`).
+    log_likelihood_history_ : list of float or None
+        Log-verossimilhanca media a cada iteracao (ver
+        :attr:`ICAAlgorithm.log_likelihood_history_
+        <ica.algorithms.base.ICAAlgorithm.log_likelihood_history_>`).
     converged_ : bool or None
         Se o algoritmo convergiu antes do numero maximo de iteracoes.
     n_iterations_ : int or None
@@ -76,6 +80,7 @@ class ICAModel:
         self.unmixing_matrix_: np.ndarray | None = None
         self.full_unmixing_matrix_: np.ndarray | None = None
         self.history_: list[float] | None = None
+        self.log_likelihood_history_: list[float] | None = None
         self.converged_: bool | None = None
         self.n_iterations_: int | None = None
         self.elapsed_time_: float | None = None
@@ -101,6 +106,7 @@ class ICAModel:
             self.full_unmixing_matrix_ = self.unmixing_matrix_
 
         self.history_ = self.algorithm.history_
+        self.log_likelihood_history_ = self.algorithm.log_likelihood_history_
         self.converged_ = self.algorithm.converged_
         self.n_iterations_ = self.algorithm.n_iterations_
         self.elapsed_time_ = self.algorithm.elapsed_time_

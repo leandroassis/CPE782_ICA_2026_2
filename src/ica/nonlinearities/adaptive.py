@@ -33,10 +33,10 @@ class AdaptiveScore(NonlinearityTemplate):
     Parameters
     ----------
     super_gaussian : NonlinearityTemplate, optional
-        Nao-linearidade usada quando ``gamma_i > 0``. Por padrao, uma nova
+        Nao-linearidade usada quando ``gamma_i < 0``. Por padrao, uma nova
         ``SuperGaussianScore()``. Injetavel para testes/customizacao.
     sub_gaussian : NonlinearityTemplate, optional
-        Nao-linearidade usada quando ``gamma_i <= 0``. Por padrao, uma
+        Nao-linearidade usada quando ``gamma_i >= 0``. Por padrao, uma
         nova ``SubGaussianScore()``. Injetavel para testes/customizacao.
 
     Attributes
@@ -107,4 +107,24 @@ class AdaptiveScore(NonlinearityTemplate):
             self.is_super_gaussian_[:, np.newaxis],
             self._super_gaussian.derivative(y),
             self._sub_gaussian.derivative(y),
+        )
+
+    def log_density(self, y: np.ndarray) -> np.ndarray:
+        """Calcula ``log p(y)`` delegando por componente conforme o sinal de ``gamma_i``.
+
+        Parameters
+        ----------
+        y : np.ndarray
+            Saida atual do modelo, shape ``(n_componentes, n_amostras)``.
+
+        Returns
+        -------
+        np.ndarray
+            ``log p(y)``, mesma shape de ``y``.
+        """
+        self._update_switch(y)
+        return np.where(
+            self.is_super_gaussian_[:, np.newaxis],
+            self._super_gaussian.log_density(y),
+            self._sub_gaussian.log_density(y),
         )

@@ -63,6 +63,7 @@ class _FakeAlgorithm:
     def __init__(self, unmixing_matrix: np.ndarray) -> None:
         self._unmixing_matrix = unmixing_matrix
         self.history_ = [0.5, 0.1, 0.01]
+        self.log_likelihood_history_ = [-3.2, -1.5, -1.1]
         self.converged_ = True
         self.n_iterations_ = 3
         self.elapsed_time_ = 0.001
@@ -132,7 +133,7 @@ def test_fit_composes_full_unmixing_matrix_with_whitening_step():
 
 
 def test_fit_copies_algorithm_diagnostics_onto_model():
-    """history_, converged_, n_iterations_ e elapsed_time_ devem ser copiados do algoritmo."""
+    """history_, log_likelihood_history_, converged_ etc. devem ser copiados do algoritmo."""
     X = np.eye(2)
     data = _FakeDataTemplate(X)
     pipeline = _FakePipelineWithoutWhitening()
@@ -141,6 +142,7 @@ def test_fit_copies_algorithm_diagnostics_onto_model():
     model = ICAModel(data=data, pipeline=pipeline, algorithm=algorithm).fit()
 
     assert model.history_ == algorithm.history_
+    assert model.log_likelihood_history_ == algorithm.log_likelihood_history_
     assert model.converged_ == algorithm.converged_
     assert model.n_iterations_ == algorithm.n_iterations_
     assert model.elapsed_time_ == algorithm.elapsed_time_

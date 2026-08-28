@@ -46,6 +46,22 @@ def test_recovers_two_laplace_sources(
     assert best_match_correlation(S, recovered) > 0.95
 
 
+def test_log_likelihood_is_non_decreasing(rng, make_sources, make_mixing_matrix):
+    """A log-verossimilhanca media (ICA_BACKGROUND.md, Secao 3.2) deve crescer a cada iteracao."""
+    S = make_sources(["laplace", "laplace"], 3000, rng)
+    A = make_mixing_matrix(rng, 2)
+    X = A @ S
+    X_whitened = Whitening().fit_transform(Centering().fit_transform(X))
+
+    algorithm = NaturalGradientICA(nonlinearity=AdaptiveScore(), max_iterations=500)
+    algorithm.fit(X_whitened)
+
+    log_likelihood = algorithm.log_likelihood_history_
+    assert len(log_likelihood) == algorithm.n_iterations_
+    assert log_likelihood[-1] >= log_likelihood[0]
+    assert np.mean(np.diff(log_likelihood) >= -1e-6) > 0.95
+
+
 def test_fit_populates_attribute_contract(rng):
     """Apos fit(), todos os atributos publicos documentados devem estar preenchidos."""
     X = rng.normal(size=(2, 200))
@@ -56,6 +72,7 @@ def test_fit_populates_attribute_contract(rng):
     assert isinstance(algorithm.converged_, bool)
     assert algorithm.n_iterations_ == 5 or algorithm.converged_
     assert len(algorithm.history_) == algorithm.n_iterations_
+    assert len(algorithm.log_likelihood_history_) == algorithm.n_iterations_
     assert algorithm.elapsed_time_ is not None and algorithm.elapsed_time_ >= 0.0
 
 

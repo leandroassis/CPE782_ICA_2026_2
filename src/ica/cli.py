@@ -19,6 +19,7 @@ from ica.data.distribution_template import DistributionTemplate
 from ica.data.image_template import ImageTemplate
 from ica.metrics.convergence_iterations import ConvergenceIterations
 from ica.metrics.execution_time import ExecutionTime
+from ica.metrics.log_likelihood import LogLikelihood
 from ica.metrics.non_gaussianity import NonGaussianityScore
 from ica.model import ICAModel
 from ica.nonlinearities.adaptive import AdaptiveScore
@@ -30,6 +31,8 @@ from ica.preprocessing.whitening import Whitening
 from ica.visualization.audio_visualizer import AudioVisualizer
 from ica.visualization.histogram_visualizer import HistogramVisualizer
 from ica.visualization.image_visualizer import ImageVisualizer
+from ica.visualization.log_likelihood_visualizer import LogLikelihoodVisualizer
+from ica.visualization.mixing_diagram_3d_visualizer import MixingDiagram3DVisualizer
 from ica.visualization.mixing_diagram_visualizer import MixingDiagramVisualizer
 
 _TEMPLATE_FACTORIES = {
@@ -149,10 +152,15 @@ def _build_visualizers(sample: str, data: DataTemplate) -> list:
     -------
     list of Visualizer
         Visualizadores a executar, sempre incluindo
-        ``MixingDiagramVisualizer`` (Secao "Decisoes de projeto" do
-        plano: informativo mesmo sem matriz de mistura verdadeira).
+        ``MixingDiagramVisualizer`` (informativo mesmo sem matriz de
+        mistura verdadeira), ``MixingDiagram3DVisualizer`` (no-op quando
+        nao ha exatamente 3 componentes) e ``LogLikelihoodVisualizer``.
     """
-    visualizers = [MixingDiagramVisualizer()]
+    visualizers = [
+        MixingDiagramVisualizer(),
+        MixingDiagram3DVisualizer(),
+        LogLikelihoodVisualizer(),
+    ]
     if sample == "imagens":
         visualizers.append(ImageVisualizer(data=data))
     elif sample == "dist":
@@ -208,7 +216,9 @@ def main(argv: list[str] | None = None) -> int:
     output_dir = args.output_dir or Path("output") / args.sample / args.run
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    metrics = model.evaluate([ConvergenceIterations(), ExecutionTime(), NonGaussianityScore()])
+    metrics = model.evaluate(
+        [ConvergenceIterations(), ExecutionTime(), NonGaussianityScore(), LogLikelihood()]
+    )
     serializable_metrics = {
         name: value.tolist() if hasattr(value, "tolist") else value
         for name, value in metrics.items()

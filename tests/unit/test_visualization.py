@@ -12,15 +12,23 @@ import pytest
 from ica.visualization.audio_visualizer import AudioVisualizer
 from ica.visualization.histogram_visualizer import HistogramVisualizer
 from ica.visualization.image_visualizer import ImageVisualizer
+from ica.visualization.log_likelihood_visualizer import LogLikelihoodVisualizer
+from ica.visualization.mixing_diagram_3d_visualizer import MixingDiagram3DVisualizer
 from ica.visualization.mixing_diagram_visualizer import MixingDiagramVisualizer
 
 
 class _FakeModel:
-    """Duble minimo de ICAModel, expondo apenas mixtures_/sources_."""
+    """Duble minimo de ICAModel, expondo mixtures_/sources_/log_likelihood_history_."""
 
-    def __init__(self, mixtures: np.ndarray, sources: np.ndarray) -> None:
+    def __init__(
+        self,
+        mixtures: np.ndarray,
+        sources: np.ndarray,
+        log_likelihood_history: list[float] | None = None,
+    ) -> None:
         self.mixtures_ = mixtures
         self.sources_ = sources
+        self.log_likelihood_history_ = log_likelihood_history or []
 
 
 class _FakeImageData:
@@ -116,6 +124,54 @@ def test_mixing_diagram_visualizer_handles_various_component_counts(tmp_path, n_
     model = _FakeModel(mixtures, sources)
 
     written = MixingDiagramVisualizer(max_pairs=3).plot(model, tmp_path)
+
+    assert len(written) == 1
+    assert written[0].exists()
+
+
+def test_log_likelihood_visualizer_writes_png(tmp_path):
+    """LogLikelihoodVisualizer.plot deve escrever o PNG da curva de convergencia."""
+    rng = np.random.default_rng(0)
+    mixtures = rng.normal(size=(2, 100))
+    sources = rng.normal(size=(2, 100))
+    history = list(np.linspace(-5.0, -1.0, 50))
+    model = _FakeModel(mixtures, sources, log_likelihood_history=history)
+
+    written = LogLikelihoodVisualizer().plot(model, tmp_path)
+
+    assert len(written) == 1
+    assert written[0].exists()
+    assert written[0].name == "log_verossimilhanca.png"
+
+
+@pytest.mark.parametrize("n_sources", [2, 3, 4, 5])
+def test_mixing_diagram_3d_visualizer_only_writes_for_exactly_three_components(
+    tmp_path, n_sources
+):
+    """MixingDiagram3DVisualizer so deve escrever arquivo quando ha exatamente 3 componentes."""
+    rng = np.random.default_rng(0)
+    mixtures = rng.normal(size=(n_sources, 200))
+    sources = rng.normal(size=(n_sources, 200))
+    model = _FakeModel(mixtures, sources)
+
+    written = MixingDiagram3DVisualizer().plot(model, tmp_path)
+
+    if n_sources == 3:
+        assert len(written) == 1
+        assert written[0].exists()
+        assert written[0].name == "nuvem_3d_misturas_vs_fontes.png"
+    else:
+        assert written == []
+
+
+def test_mixing_diagram_3d_visualizer_subsamples_large_point_clouds(tmp_path):
+    """Com mais amostras que max_points, o visualizador nao deve falhar (subamostra)."""
+    rng = np.random.default_rng(0)
+    mixtures = rng.normal(size=(3, 10_000))
+    sources = rng.normal(size=(3, 10_000))
+    model = _FakeModel(mixtures, sources)
+
+    written = MixingDiagram3DVisualizer(max_points=500).plot(model, tmp_path)
 
     assert len(written) == 1
     assert written[0].exists()

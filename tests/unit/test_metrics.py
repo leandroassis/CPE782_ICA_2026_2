@@ -4,16 +4,20 @@ import numpy as np
 
 from ica.metrics.convergence_iterations import ConvergenceIterations
 from ica.metrics.execution_time import ExecutionTime
+from ica.metrics.log_likelihood import LogLikelihood
 from ica.metrics.non_gaussianity import NonGaussianityScore
 
 
 class _FakeModel:
     """Duble minimo de ICAModel, expondo apenas os atributos que as metricas leem."""
 
-    def __init__(self, n_iterations=None, elapsed_time=None, sources=None) -> None:
+    def __init__(
+        self, n_iterations=None, elapsed_time=None, sources=None, log_likelihood_history=None
+    ) -> None:
         self.n_iterations_ = n_iterations
         self.elapsed_time_ = elapsed_time
         self.sources_ = sources
+        self.log_likelihood_history_ = log_likelihood_history
 
 
 def test_convergence_iterations_reads_n_iterations():
@@ -28,11 +32,18 @@ def test_execution_time_reads_elapsed_time():
     assert ExecutionTime().compute(model) == 1.5
 
 
+def test_log_likelihood_reads_last_history_value():
+    """LogLikelihood deve retornar exatamente o ultimo valor de model.log_likelihood_history_."""
+    model = _FakeModel(log_likelihood_history=[-5.0, -3.0, -1.2])
+    assert LogLikelihood().compute(model) == -1.2
+
+
 def test_metrics_expose_stable_names():
     """O atributo name de cada metrica deve ser um identificador estavel para evaluate()."""
     assert ConvergenceIterations().name == "convergence_iterations"
     assert ExecutionTime().name == "execution_time_seconds"
     assert NonGaussianityScore().name == "non_gaussianity_kurtosis"
+    assert LogLikelihood().name == "log_likelihood"
 
 
 def test_non_gaussianity_score_signs_match_known_distributions(rng):

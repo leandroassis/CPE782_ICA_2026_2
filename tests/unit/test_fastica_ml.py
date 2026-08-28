@@ -58,6 +58,22 @@ def test_recovers_two_laplace_sources_quickly(
     assert best_match_correlation(S, recovered) > 0.99
 
 
+def test_log_likelihood_is_non_decreasing(rng, make_sources, make_mixing_matrix):
+    """A log-verossimilhanca media (ICA_BACKGROUND.md, Secao 3.2) deve crescer a cada iteracao."""
+    S = make_sources(["laplace", "laplace"], 3000, rng)
+    A = make_mixing_matrix(rng, 2)
+    X = A @ S
+    X_whitened = Whitening().fit_transform(Centering().fit_transform(X))
+
+    algorithm = FastICAML(nonlinearity=AdaptiveScore(), max_iterations=100)
+    algorithm.fit(X_whitened)
+
+    log_likelihood = algorithm.log_likelihood_history_
+    assert len(log_likelihood) == algorithm.n_iterations_
+    assert log_likelihood[-1] >= log_likelihood[0]
+    assert np.mean(np.diff(log_likelihood) >= -1e-6) > 0.95
+
+
 def test_learning_rate_is_ignored():
     """FastICAML e livre de taxa de aprendizado -- o parametro e aceito mas nao usado.
 
@@ -83,4 +99,5 @@ def test_fit_populates_attribute_contract(rng):
     assert algorithm.unmixing_matrix_.shape == (2, 2)
     assert isinstance(algorithm.converged_, bool)
     assert len(algorithm.history_) == algorithm.n_iterations_
+    assert len(algorithm.log_likelihood_history_) == algorithm.n_iterations_
     assert algorithm.elapsed_time_ is not None and algorithm.elapsed_time_ >= 0.0

@@ -47,3 +47,22 @@ class NonlinearityTemplate(ABC):
         np.ndarray
             ``g'(y)``, mesma shape de ``y``.
         """
+
+    @abstractmethod
+    def log_density(self, y: np.ndarray) -> np.ndarray:
+        """Calcula ``log p_suposta(y)`` elemento a elemento (antiderivada de ``-g``).
+
+        Usada para acompanhar a log-verossimilhanca media por iteracao
+        (ICA_BACKGROUND.md, Secao 3.2): ``(1/T) log L(B) = sum_i E{log
+        p_i(b_i^T x)} + log|det B|``.
+
+        Parameters
+        ----------
+        y : np.ndarray
+            Saida atual do modelo, shape ``(n_componentes, n_amostras)``.
+
+        Returns
+        -------
+        np.ndarray
+            ``log p_suposta(y)``, mesma shape de ``y``.
+        """

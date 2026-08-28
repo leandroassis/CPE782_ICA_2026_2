@@ -13,6 +13,7 @@ class _SpyNonlinearity(NonlinearityTemplate):
         self.marker = marker
         self.score_calls: list[np.ndarray] = []
         self.derivative_calls: list[np.ndarray] = []
+        self.log_density_calls: list[np.ndarray] = []
 
     def score(self, y: np.ndarray) -> np.ndarray:
         self.score_calls.append(y)
@@ -20,6 +21,10 @@ class _SpyNonlinearity(NonlinearityTemplate):
 
     def derivative(self, y: np.ndarray) -> np.ndarray:
         self.derivative_calls.append(y)
+        return np.full_like(y, self.marker)
+
+    def log_density(self, y: np.ndarray) -> np.ndarray:
+        self.log_density_calls.append(y)
         return np.full_like(y, self.marker)
 
 
@@ -96,3 +101,24 @@ def test_derivative_delegates_to_injected_nonlinearities():
     assert len(sub_spy.derivative_calls) == 1
     assert np.all(result[0] == 7.0)
     assert np.all(result[1] == -7.0)
+
+
+def test_log_density_delegates_to_injected_nonlinearities():
+    """O metodo log_density deve delegar, por componente, ao duble injetado correspondente."""
+    super_spy = _SpyNonlinearity(marker=3.0)
+    sub_spy = _SpyNonlinearity(marker=-3.0)
+    adaptive = AdaptiveScore(super_gaussian=super_spy, sub_gaussian=sub_spy)
+
+    rng = np.random.default_rng(0)
+    laplace_row = rng.laplace(size=5000)
+    laplace_row = (laplace_row - laplace_row.mean()) / laplace_row.std()
+    uniform_row = rng.uniform(-1, 1, size=5000)
+    uniform_row = (uniform_row - uniform_row.mean()) / uniform_row.std()
+    y = np.vstack([laplace_row, uniform_row])
+
+    result = adaptive.log_density(y)
+
+    assert len(super_spy.log_density_calls) == 1
+    assert len(sub_spy.log_density_calls) == 1
+    assert np.all(result[0] == 3.0)
+    assert np.all(result[1] == -3.0)

@@ -23,7 +23,7 @@ def test_cli_smoke_imagens(tmp_path):
     rng = np.random.default_rng(0)
     run_dir = tmp_path / "imagens" / "run1"
     run_dir.mkdir(parents=True)
-    _write_mixture_csv(run_dir / "mix_imagens_grayscale.csv", n_mixtures=2, n_rows=16, rng=rng)
+    _write_mixture_csv(run_dir / "mix_imagens_grayscale.csv", n_mixtures=3, n_rows=16, rng=rng)
 
     output_dir = tmp_path / "output"
     exit_code = main(
@@ -47,6 +47,8 @@ def test_cli_smoke_imagens(tmp_path):
     assert (output_dir / "metrics.json").exists()
     assert (output_dir / "imagens_misturas_vs_fontes.png").exists()
     assert (output_dir / "diagrama_de_mistura.png").exists()
+    assert (output_dir / "log_verossimilhanca.png").exists()
+    assert (output_dir / "nuvem_3d_misturas_vs_fontes.png").exists()
 
 
 def test_cli_smoke_dist(tmp_path):
@@ -80,6 +82,8 @@ def test_cli_smoke_dist(tmp_path):
     assert (output_dir / "metrics.json").exists()
     assert (output_dir / "histogramas_misturas_vs_fontes.png").exists()
     assert (output_dir / "diagrama_de_mistura.png").exists()
+    assert (output_dir / "log_verossimilhanca.png").exists()
+    assert (output_dir / "nuvem_3d_misturas_vs_fontes.png").exists()
 
 
 def test_cli_smoke_audio(tmp_path):
@@ -114,3 +118,4 @@ def test_cli_smoke_audio(tmp_path):
     assert (output_dir / "audio_formas_de_onda_e_espectrogramas.png").exists()
     assert (output_dir / "fonte_recuperada_1.wav").exists()
     assert (output_dir / "fonte_recuperada_2.wav").exists()
+    assert (output_dir / "log_verossimilhanca.png").exists()
