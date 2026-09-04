@@ -2,6 +2,7 @@ asset/
 context/
 
 .venv/
+.ipynb_checkpoints/
 __pycache__/
 *.egg-info/
 docs/

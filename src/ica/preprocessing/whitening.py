@@ -26,6 +26,11 @@ class Whitening(PreprocessingStep):
         :meth:`fit`.
     dewhitening_matrix_ : np.ndarray or None
         Inversa de V (``E D^(1/2)``), usada por :meth:`inverse_transform`.
+    linear_matrix_ : np.ndarray or None
+        Alias de ``whitening_matrix_`` (ver
+        :attr:`~ica.preprocessing.base.PreprocessingStep.linear_matrix_`),
+        usado por ``Pipeline.compose_linear_matrix`` para montar
+        ``full_unmixing_matrix_``.
     """
 
     def __init__(self) -> None:
@@ -53,6 +58,11 @@ class Whitening(PreprocessingStep):
         self.whitening_matrix_ = inverse_sqrt_eigenvalues[:, np.newaxis] * eigenvectors.T
         self.dewhitening_matrix_ = eigenvectors * sqrt_eigenvalues[np.newaxis, :]
         return self
+
+    @property
+    def linear_matrix_(self) -> np.ndarray | None:
+        """Ver Attributes da classe. Alias de ``whitening_matrix_``."""
+        return self.whitening_matrix_
 
     def transform(self, X: np.ndarray) -> np.ndarray:
         """Aplica ``z = V x``.

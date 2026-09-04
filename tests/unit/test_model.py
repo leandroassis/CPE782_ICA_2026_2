@@ -23,38 +23,39 @@ class _FakeDataTemplate:
 
 
 class _FakePipelineWithoutWhitening:
-    """Duble: pipeline que nao contem nenhum passo de Whitening."""
+    """Duble: pipeline sem nenhum passo linear (equivalente a so ter Centering)."""
 
     def __init__(self, transform_offset: float = 10.0) -> None:
         self._transform_offset = transform_offset
         self.fit_transform_calls: list[np.ndarray] = []
+        self.reconstruction_transform_calls: list[np.ndarray] = []
 
     def fit_transform(self, X: np.ndarray) -> np.ndarray:
         self.fit_transform_calls.append(X)
         return X + self._transform_offset
 
-    def get_step(self, step_type):
-        raise ValueError("nenhum passo deste tipo")
+    def reconstruction_transform(self, X: np.ndarray) -> np.ndarray:
+        self.reconstruction_transform_calls.append(X)
+        return X + self._transform_offset
 
-
-class _FakeWhiteningStep:
-    """Duble: expoe apenas whitening_matrix_, como ica.preprocessing.whitening.Whitening."""
-
-    def __init__(self, whitening_matrix: np.ndarray) -> None:
-        self.whitening_matrix_ = whitening_matrix
+    def compose_linear_matrix(self, base_matrix: np.ndarray) -> np.ndarray:
+        return base_matrix
 
 
 class _FakePipelineWithWhitening:
-    """Duble: pipeline cujo get_step(Whitening) devolve um passo com whitening_matrix_ conhecida."""
+    """Duble: pipeline cujo compose_linear_matrix aplica uma matriz de branqueamento conhecida."""
 
     def __init__(self, whitening_matrix: np.ndarray) -> None:
-        self._whitening_step = _FakeWhiteningStep(whitening_matrix)
+        self._whitening_matrix = whitening_matrix
 
     def fit_transform(self, X: np.ndarray) -> np.ndarray:
         return X
 
-    def get_step(self, step_type):
-        return self._whitening_step
+    def reconstruction_transform(self, X: np.ndarray) -> np.ndarray:
+        return X
+
+    def compose_linear_matrix(self, base_matrix: np.ndarray) -> np.ndarray:
+        return base_matrix @ self._whitening_matrix
 
 
 class _FakeAlgorithm:
@@ -101,12 +102,31 @@ def test_fit_calls_collaborators_in_order_and_wires_outputs():
     assert np.array_equal(algorithm.fit_calls[0], X + 10.0)
     assert np.array_equal(model.mixtures_, X)
     assert np.array_equal(model.preprocessed_, X + 10.0)
-    assert np.array_equal(model.sources_, B @ (X + 10.0))
     assert np.array_equal(model.unmixing_matrix_, B)
 
 
-def test_fit_falls_back_to_unmixing_matrix_when_no_whitening_step():
-    """Sem passo de Whitening, full_unmixing_matrix_ deve igualar unmixing_matrix_."""
+def test_fit_reconstructs_sources_from_reconstruction_transform_of_original_mixtures():
+    """sources_ deve vir de unmixing_matrix_ @ pipeline.reconstruction_transform(mixtures_).
+
+    Nao de ``preprocessed_`` diretamente -- distincao introduzida para
+    suportar passos ``estimation_only`` como TemporalFiltering (livro-texto,
+    Secao 13.1): a reconstrucao final deve partir sempre dos dados
+    originais, mesmo que a estimacao de B tenha usado dados filtrados.
+    """
+    X = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    data = _FakeDataTemplate(X)
+    pipeline = _FakePipelineWithoutWhitening(transform_offset=10.0)
+    B = np.array([[1.0, 0.0], [0.0, 1.0]])
+    algorithm = _FakeAlgorithm(B)
+
+    model = ICAModel(data=data, pipeline=pipeline, algorithm=algorithm).fit()
+
+    assert np.array_equal(pipeline.reconstruction_transform_calls[0], X)
+    assert np.array_equal(model.sources_, B @ (X + 10.0))
+
+
+def test_fit_full_unmixing_matrix_delegates_to_pipeline_compose_linear_matrix():
+    """full_unmixing_matrix_ deve vir de pipeline.compose_linear_matrix(unmixing_matrix_)."""
     X = np.eye(2)
     data = _FakeDataTemplate(X)
     pipeline = _FakePipelineWithoutWhitening()
@@ -118,8 +138,8 @@ def test_fit_falls_back_to_unmixing_matrix_when_no_whitening_step():
     assert np.array_equal(model.full_unmixing_matrix_, B)
 
 
-def test_fit_composes_full_unmixing_matrix_with_whitening_step():
-    """Com um passo de Whitening, full_unmixing_matrix_ deve ser B @ whitening_matrix_."""
+def test_fit_composes_full_unmixing_matrix_via_pipeline():
+    """Com compose_linear_matrix aplicando V, full_unmixing_matrix_ deve ser B @ V."""
     X = np.eye(2)
     data = _FakeDataTemplate(X)
     V = np.array([[3.0, 0.0], [0.0, 3.0]])

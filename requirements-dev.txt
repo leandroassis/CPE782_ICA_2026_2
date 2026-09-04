@@ -4,3 +4,5 @@ pytest
 pytest-cov
 pdoc
 ruff
+jupyter
+ipykernel

@@ -12,7 +12,6 @@ import numpy as np
 from ica.algorithms.base import ICAAlgorithm
 from ica.data.base import DataTemplate
 from ica.preprocessing.pipeline import Pipeline
-from ica.preprocessing.whitening import Whitening
 
 if TYPE_CHECKING:
     from ica.metrics.base import Metric
@@ -50,10 +49,15 @@ class ICAModel:
         Matriz de separacao estimada pelo algoritmo, no espaco
         pre-processado (ex.: branqueado).
     full_unmixing_matrix_ : np.ndarray or None
-        Matriz de separacao composta com o branqueamento, mapeando
-        diretamente das misturas originais para as fontes recuperadas.
-        Definida apenas quando o pipeline inclui um passo
-        :class:`~ica.preprocessing.whitening.Whitening`.
+        Matriz de separacao composta com os passos lineares do pipeline
+        (ex.: :class:`~ica.preprocessing.whitening.Whitening`,
+        :class:`~ica.preprocessing.pca.PCA`), mapeando diretamente das
+        misturas originais para as fontes recuperadas -- ver
+        :meth:`~ica.preprocessing.pipeline.Pipeline.compose_linear_matrix`.
+        Passos afins (:class:`~ica.preprocessing.centering.Centering`) ou
+        ``estimation_only``
+        (:class:`~ica.preprocessing.temporal_filtering.TemporalFiltering`)
+        nao contribuem.
     history_ : list of float or None
         Historico de convergencia do algoritmo (ver
         :attr:`ICAAlgorithm.history_ <ica.algorithms.base.ICAAlgorithm.history_>`).
@@ -88,6 +92,14 @@ class ICAModel:
     def fit(self) -> "ICAModel":
         """Carrega a amostra, pre-processa e estima a separacao de fontes.
 
+        O pipeline e aplicado duas vezes com papeis distintos (ver
+        :attr:`~ica.preprocessing.base.PreprocessingStep.estimation_only`):
+        uma vez completo (``fit_transform``), para *estimar* a matriz de
+        separacao B, e outra vez pulando os passos ``estimation_only``
+        (``reconstruction_transform``), partindo sempre dos dados
+        originais, para *reconstruir* as fontes finais -- livro-texto,
+        Secao 13.1 (p.264).
+
         Returns
         -------
         ICAModel
@@ -97,13 +109,11 @@ class ICAModel:
         self.preprocessed_ = self.pipeline.fit_transform(self.mixtures_)
 
         self.unmixing_matrix_ = self.algorithm.fit(self.preprocessed_)
-        self.sources_ = self.unmixing_matrix_ @ self.preprocessed_
 
-        try:
-            whitening = self.pipeline.get_step(Whitening)
-            self.full_unmixing_matrix_ = self.unmixing_matrix_ @ whitening.whitening_matrix_
-        except ValueError:
-            self.full_unmixing_matrix_ = self.unmixing_matrix_
+        reconstruction_input = self.pipeline.reconstruction_transform(self.mixtures_)
+        self.sources_ = self.unmixing_matrix_ @ reconstruction_input
+
+        self.full_unmixing_matrix_ = self.pipeline.compose_linear_matrix(self.unmixing_matrix_)
 
         self.history_ = self.algorithm.history_
         self.log_likelihood_history_ = self.algorithm.log_likelihood_history_
