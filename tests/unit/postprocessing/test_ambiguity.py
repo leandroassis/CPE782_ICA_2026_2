@@ -87,6 +87,26 @@ def test_resolve_ambiguities_preserves_recoverability_up_to_reordering(rng, make
     assert np.all(correlations.max(axis=0) > 0.99)
 
 
+def test_resolve_ambiguities_image_domain_stays_in_zero_one_range_even_when_sign_flips():
+    """Regressao: sinal aplicado depois da escala jogava a componente para [-1,0].
+
+    Uma componente assimetrica o bastante para fix_sign decidir inverter o
+    sinal, no dominio "image", nao pode terminar fora de [0,1] -- isso e
+    exibido como preto solido por ``imshow(vmin=0, vmax=1)`` e quebra
+    qualquer metrica perceptual que assuma essa faixa (PSNR com MAX=1,
+    SSIM).
+    """
+    rng = np.random.default_rng(0)
+    exponential = rng.exponential(size=(1, 5000))
+    negatively_skewed = -(exponential - exponential.mean())
+    assert skew(negatively_skewed, axis=1)[0] < 0  # fix_sign vai inverter esta
+
+    resolved = resolve_ambiguities(negatively_skewed, domain="image")
+
+    assert resolved.min() >= -1e-8
+    assert resolved.max() <= 1.0 + 1e-8
+
+
 def test_resolve_ambiguities_kurtosis_matches_expected_after_scaling():
     """A curtose excedente deve ser preservada pela normalizacao de escala (invariante)."""
     rng = np.random.default_rng(1)

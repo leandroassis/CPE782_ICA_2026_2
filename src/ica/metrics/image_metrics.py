@@ -93,6 +93,33 @@ def ssim(
     return float(np.mean(numerator / denominator))
 
 
+def align_sign_unit_interval(value: np.ndarray, sign: float) -> np.ndarray:
+    """Desfaz uma inversao de sinal de um array ja confinado a ``[0, 1]``.
+
+    A ambiguidade de sinal da ICA (skill ``ica-ml``, Secao 1) sobrevive ao
+    rescale ``[0, 1]`` de :func:`~ica.postprocessing.ambiguity.fix_scale`
+    como o **negativo fotografico**: para ``x`` em ``[0,1]``, o equivalente
+    de ``-x`` nessa faixa e ``1 - x`` (``minmax(-Y) = 1 - minmax(Y)``, ver
+    docstring de :func:`~ica.postprocessing.ambiguity.resolve_ambiguities`).
+    Uma correlacao negativa com a fonte casada (:attr:`MatchResult.signs`
+    de :func:`~ica.postprocessing.matching.hungarian_match`) e exatamente
+    esse caso -- usar ``1 - x``, nunca ``-x``, para realinhar.
+
+    Parameters
+    ----------
+    value : np.ndarray
+        Imagem/array ja em ``[0, 1]``.
+    sign : float
+        ``+1`` (mantem) ou ``-1`` (desfaz o negativo fotografico).
+
+    Returns
+    -------
+    np.ndarray
+        ``value`` se ``sign > 0``, senao ``1 - value``.
+    """
+    return value if sign > 0 else 1.0 - value
+
+
 def image_metrics_battery(
     sources_true: np.ndarray, sources_estimated: np.ndarray, height: int, width: int
 ) -> list[tuple[float, float]]:
@@ -100,7 +127,13 @@ def image_metrics_battery(
 
     Ambas as imagens sao normalizadas para ``[0, 1]`` antes da comparacao
     (a fonte verdadeira nao vem necessariamente nessa faixa; a recuperada
-    ja vem, via :func:`~ica.postprocessing.ambiguity.fix_scale`).
+    ja vem, via :func:`~ica.postprocessing.ambiguity.fix_scale`). O sinal
+    da componente recuperada e realinhado ao da fonte casada
+    (:func:`align_sign_unit_interval`) antes de comparar -- sem isso, uma
+    componente corretamente separada mas com a ambiguidade de sinal
+    resolvida "ao contrario" pontuaria como se fosse uma separacao ruim
+    (PSNR/SSIM penalizam o negativo fotografico como se fosse conteudo
+    diferente, quando na verdade e a mesma informacao).
 
     Parameters
     ----------
@@ -125,6 +158,7 @@ def image_metrics_battery(
             sources_true[match.reference_indices[i]].reshape(height, width)
         )
         estimated_image = sources_estimated[match.matched_indices[i]].reshape(height, width)
+        estimated_image = align_sign_unit_interval(estimated_image, match.signs[i])
         results.append((psnr(true_image, estimated_image), ssim(true_image, estimated_image)))
     return results
 

@@ -6,6 +6,7 @@ Secao 5.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -47,9 +48,18 @@ def distribution_fit_quality(estimated: np.ndarray, true: np.ndarray) -> Distrib
         Estatisticas KS (com p-valor) e AD de 2 amostras.
     """
     ks_result = ks_2samp(estimated, true)
-    # So o statistic e consumido; variant="midrank" fixa o metodo que o
-    # SciPy >= 1.17 passou a exigir explicitamente, sem mudar o resultado.
-    ad_result = anderson_ksamp([estimated, true], variant="midrank")
+    # So o statistic e consumido (nunca o p-valor); variant="midrank" fixa o
+    # metodo que o SciPy >= 1.17 passou a exigir explicitamente, sem mudar o
+    # resultado. O p-valor do Anderson-Darling de k amostras vem de uma
+    # tabela de interpolacao com faixa fixa e o SciPy emite um UserWarning
+    # sempre que o valor real fica fora dela (capped/floored) -- inofensivo
+    # aqui, ja que o p-valor nunca e lido, mas silenciado explicitamente
+    # para nao poluir a saida (inclusive em processos filhos do
+    # ProcessPoolExecutor, que nao herdam filtros de warnings do processo
+    # pai).
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        ad_result = anderson_ksamp([estimated, true], variant="midrank")
     return DistributionFitQuality(
         ks_statistic=float(ks_result.statistic),
         ks_pvalue=float(ks_result.pvalue),
@@ -61,6 +71,14 @@ def distribution_metrics_battery(
     sources_true: np.ndarray, sources_estimated: np.ndarray
 ) -> list[DistributionFitQuality]:
     """Casa (hungaro) e calcula :func:`distribution_fit_quality` por par.
+
+    O sinal da componente recuperada e realinhado ao da fonte casada antes
+    do teste (``estimated * signs[i]``, ver
+    :attr:`~ica.postprocessing.matching.MatchResult.signs`): sem isso, uma
+    fonte assimetrica (exponencial, Rayleigh, qui-quadrado) recuperada com
+    a ambiguidade de sinal "ao contrario" e o espelho da distribuicao
+    verdadeira, o que KS/AD penalizariam como bondade de ajuste ruim apesar
+    do formato ter sido corretamente recuperado.
 
     Parameters
     ----------
@@ -78,7 +96,7 @@ def distribution_metrics_battery(
     order = np.argsort(match.reference_indices)
     return [
         distribution_fit_quality(
-            estimated=sources_estimated[match.matched_indices[i]],
+            estimated=match.signs[i] * sources_estimated[match.matched_indices[i]],
             true=sources_true[match.reference_indices[i]],
         )
         for i in order

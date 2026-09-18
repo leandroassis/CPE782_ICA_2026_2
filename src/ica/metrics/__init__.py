@@ -30,6 +30,7 @@ from ica.metrics.family_identification import (
 from ica.metrics.image_metrics import (
     PSNRMetric,
     SSIMMetric,
+    align_sign_unit_interval,
     image_metrics_battery,
     min_max_normalize,
     psnr,
@@ -61,6 +62,7 @@ __all__ = [
     "psnr",
     "ssim",
     "min_max_normalize",
+    "align_sign_unit_interval",
     "image_metrics_battery",
     "PSNRMetric",
     "SSIMMetric",

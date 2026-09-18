@@ -25,7 +25,7 @@ from scipy.signal import stft
 
 from ica.metrics.distribution_metrics import distribution_fit_quality
 from ica.metrics.family_identification import family_pdf, identify_family
-from ica.metrics.image_metrics import min_max_normalize, psnr, ssim
+from ica.metrics.image_metrics import align_sign_unit_interval, min_max_normalize, psnr, ssim
 from ica.postprocessing.matching import hungarian_match
 from ica.visualization.base import Visualizer
 
@@ -50,14 +50,17 @@ _SPECTROGRAM_CMAP = "magma"  # sequencial, perceptualmente uniforme (nunca "jet"
 
 def _match_true_to_estimated(
     reference: np.ndarray | None, candidates: np.ndarray
-) -> tuple[dict[int, int], dict[int, float]]:
+) -> tuple[dict[int, int], dict[int, float], dict[int, float]]:
     """Casa ``reference`` (gabarito) a ``candidates`` (obtido) por correlacao (hungaro).
 
     A coluna **candidata** nunca muda de ordem na figura-vitrine (ver
     docstring do modulo); o casamento so decide qual indice do gabarito
-    ilustra cada coluna. Devolve dois dicts indexados pela coluna
-    candidata: ``estimado -> verdadeiro`` e ``estimado -> correlacao`` do
-    par -- ambos vazios quando ``reference`` e ``None`` (sem gabarito).
+    ilustra cada coluna. Devolve tres dicts indexados pela coluna
+    candidata: ``estimado -> verdadeiro``, ``estimado -> correlacao`` (em
+    modulo) e ``estimado -> sinal`` (``+-1``, para realinhar a polaridade
+    antes de exibir/pontuar -- ver
+    :func:`~ica.metrics.image_metrics.align_sign_unit_interval`) -- todos
+    vazios quando ``reference`` e ``None`` (sem gabarito).
 
     Parameters
     ----------
@@ -69,11 +72,11 @@ def _match_true_to_estimated(
 
     Returns
     -------
-    (dict, dict)
-        ``true_by_estimated``, ``correlation_by_estimated``.
+    (dict, dict, dict)
+        ``true_by_estimated``, ``correlation_by_estimated``, ``sign_by_estimated``.
     """
     if reference is None:
-        return {}, {}
+        return {}, {}, {}
     match = hungarian_match(reference, candidates)
     true_by_estimated = dict(
         zip(match.matched_indices.tolist(), match.reference_indices.tolist(), strict=True)
@@ -81,7 +84,10 @@ def _match_true_to_estimated(
     correlation_by_estimated = dict(
         zip(match.matched_indices.tolist(), match.correlations.tolist(), strict=True)
     )
-    return true_by_estimated, correlation_by_estimated
+    sign_by_estimated = dict(
+        zip(match.matched_indices.tolist(), match.signs.tolist(), strict=True)
+    )
+    return true_by_estimated, correlation_by_estimated, sign_by_estimated
 
 
 def _convergence_curves_by_algorithm(
@@ -302,7 +308,9 @@ class ShowcaseVisualizer(Visualizer):
         n_rows = 3 if has_expected else 2
         n_cols = model.mixtures_.shape[0]
 
-        true_for_estimated, _ = _match_true_to_estimated(model.sources_true_, model.sources_)
+        true_for_estimated, _, sign_for_estimated = _match_true_to_estimated(
+            model.sources_true_, model.sources_
+        )
         height = model.signal_meta_.get("height")
         width = model.signal_meta_.get("width")
 
@@ -314,7 +322,12 @@ class ShowcaseVisualizer(Visualizer):
 
         # Cada painel e normalizado para [0,1] so para exibicao (mesma escala
         # de cinza em mistura/esperado/obtido, apesar de estarem em unidades
-        # distintas) -- nao afeta nenhuma metrica, que usa os dados crus.
+        # distintas) -- nao afeta nenhuma metrica, que usa os dados crus. O
+        # "obtido" e realinhado de sinal contra a fonte casada (quando ha
+        # gabarito) antes de exibir/pontuar -- sem isso, uma componente
+        # corretamente separada mas com a ambiguidade de sinal resolvida "ao
+        # contrario" apareceria como o negativo fotografico da fonte
+        # (ver ica.postprocessing.ambiguity.resolve_ambiguities).
         image = None
         for col in range(n_cols):
             image = axes[0, col].imshow(
@@ -334,15 +347,15 @@ class ShowcaseVisualizer(Visualizer):
                 )
                 axes[row, col].set_title(f"esperado {true_idx + 1}", fontsize=9)
                 row += 1
-            axes[row, col].imshow(
-                data.reconstruct(model.sources_[col]), cmap="gray", vmin=0, vmax=1
-            )
+            sign = sign_for_estimated.get(col, 1.0)
+            aligned = align_sign_unit_interval(model.sources_[col], sign)
+            axes[row, col].imshow(data.reconstruct(aligned), cmap="gray", vmin=0, vmax=1)
             title = f"obtido {col + 1}"
             if true_idx is not None and height and width:
                 true_norm = min_max_normalize(
                     model.sources_true_[true_idx].reshape(height, width)
                 )
-                estimated = model.sources_[col].reshape(height, width)
+                estimated = aligned.reshape(height, width)
                 title += (
                     f"\nPSNR={psnr(true_norm, estimated):.1f}dB "
                     f"SSIM={ssim(true_norm, estimated):.2f}"
@@ -404,25 +417,30 @@ class ShowcaseVisualizer(Visualizer):
         n_rows = 2 if has_expected else 1
         n_cols = len(estimated_composites)
 
-        true_for_estimated = {}
+        true_for_estimated, _, sign_for_estimated = {}, {}, {}
         if has_expected:
             true_flat = np.array([c.reshape(-1) for c in true_composites])
             estimated_flat = np.array([c.reshape(-1) for c in estimated_composites])
-            true_for_estimated, _ = _match_true_to_estimated(true_flat, estimated_flat)
+            true_for_estimated, _, sign_for_estimated = _match_true_to_estimated(
+                true_flat, estimated_flat
+            )
 
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(3 * n_cols, 3 * n_rows), squeeze=False)
         for col in range(n_cols):
             row = 0
             true_idx = true_for_estimated.get(col)
+            # Um unico sinal por composto (nao por canal): R/G/B da mesma
+            # imagem compartilham a ambiguidade de sinal (ver
+            # ica.postprocessing.ambiguity.resolve_ambiguities).
+            sign = sign_for_estimated.get(col, 1.0)
+            aligned_composite = align_sign_unit_interval(estimated_composites[col], sign)
             if has_expected and true_idx is not None:
                 axes[0, col].imshow(
                     _composite_to_rgb_image(true_composites[true_idx], height, width)
                 )
                 axes[0, col].set_title(f"esperado {true_idx + 1}")
                 row = 1
-            axes[row, col].imshow(
-                _composite_to_rgb_image(estimated_composites[col], height, width)
-            )
+            axes[row, col].imshow(_composite_to_rgb_image(aligned_composite, height, width))
             title = f"obtido {col + 1}"
             if true_idx is not None:
                 per_channel_psnr, per_channel_ssim = [], []
@@ -430,7 +448,7 @@ class ShowcaseVisualizer(Visualizer):
                     true_channel = min_max_normalize(
                         true_composites[true_idx][channel].reshape(height, width)
                     )
-                    estimated_channel = estimated_composites[col][channel].reshape(height, width)
+                    estimated_channel = aligned_composite[channel].reshape(height, width)
                     per_channel_psnr.append(psnr(true_channel, estimated_channel))
                     per_channel_ssim.append(ssim(true_channel, estimated_channel))
                 title += (
@@ -457,8 +475,8 @@ class ShowcaseVisualizer(Visualizer):
         n_rows = 3 if has_expected else 2
         n_cols = model.mixtures_.shape[0]
 
-        true_for_estimated, correlation_for_estimated = _match_true_to_estimated(
-            model.sources_true_, model.sources_
+        true_for_estimated, correlation_for_estimated, sign_for_estimated = (
+            _match_true_to_estimated(model.sources_true_, model.sources_)
         )
 
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(3.5 * n_cols, 3 * n_rows), squeeze=False)
@@ -486,7 +504,12 @@ class ShowcaseVisualizer(Visualizer):
                 )
                 axes[row, col].legend(fontsize=7, loc="upper right")
                 row += 1
-            estimated_source = model.sources_[col]
+            # Realinha o sinal contra a fonte casada (quando ha gabarito):
+            # uma componente assimetrica com a ambiguidade de sinal
+            # resolvida "ao contrario" e o espelho da fonte verdadeira,
+            # o que inflaria KS/AD mesmo com o formato corretamente
+            # recuperado (ver ica.postprocessing.ambiguity.resolve_ambiguities).
+            estimated_source = sign_for_estimated.get(col, 1.0) * model.sources_[col]
             family = identify_family(estimated_source)
             axes[row, col].hist(
                 estimated_source,
@@ -580,7 +603,10 @@ class ShowcaseVisualizer(Visualizer):
         n_rows = 3 if has_expected else 2
         n_cols = model.mixtures_.shape[0]
 
-        true_for_estimated, correlation_for_estimated = _match_true_to_estimated(
+        # O espectrograma e uma magnitude (|STFT|), invariante ao sinal do
+        # sinal no tempo (|STFT(-x)| = |STFT(x)|) -- sem necessidade de
+        # realinhar sinal aqui, ao contrario de imagem/distribuicao.
+        true_for_estimated, correlation_for_estimated, _ = _match_true_to_estimated(
             model.sources_true_, model.sources_
         )
 

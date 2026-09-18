@@ -29,6 +29,16 @@ class MatchResult:
         casado a ``reference_indices[k]``.
     correlations : np.ndarray
         Correlacao absoluta de cada par casado, mesma ordem.
+    signs : np.ndarray
+        Sinal (``+-1``) da correlacao **nao-absoluta** de cada par casado,
+        mesma ordem -- ``-1`` significa que o candidato esta anti-
+        correlacionado com a referencia (ambiguidade de sinal da ICA
+        resolvida "ao contrario" para esse par). Existe para que
+        consumidores de metricas sensiveis a sinal (PSNR/SSIM, KS/AD) alinhem
+        a polaridade antes de comparar -- SIR/SDR/SI-SDR ja sao insensiveis a
+        sinal (a projecao por minimos quadrados absorve o sinal sozinha) e
+        podem ignorar este campo. Nunca realimenta a saida "cega"
+        (:func:`~ica.postprocessing.ambiguity.resolve_ambiguities`).
     mean_correlation : float
         Media de ``correlations`` -- proxima de 1.0 indica bom casamento.
     """
@@ -36,6 +46,7 @@ class MatchResult:
     reference_indices: np.ndarray
     matched_indices: np.ndarray
     correlations: np.ndarray
+    signs: np.ndarray
     mean_correlation: float
 
 
@@ -46,7 +57,9 @@ def hungarian_match(reference: np.ndarray, candidates: np.ndarray) -> MatchResul
     ``C_ij = 1 - |corr(reference_i, candidates_j)|``, resolvido por
     atribuicao otima (``scipy.optimize.linear_sum_assignment``). Resolve
     permutacao e sinal (via ``|.|``) apenas para o calculo -- nao reordena
-    nenhuma das duas entradas.
+    nenhuma das duas entradas. O sinal da correlacao de cada par (antes do
+    valor absoluto) vem em :attr:`MatchResult.signs`, para quem precisar
+    alinhar polaridade em vez de so pontuar.
 
     Parameters
     ----------
@@ -65,17 +78,21 @@ def hungarian_match(reference: np.ndarray, candidates: np.ndarray) -> MatchResul
     """
     n_reference = reference.shape[0]
     n_candidates = candidates.shape[0]
-    correlation = np.zeros((n_reference, n_candidates))
+    signed_correlation = np.zeros((n_reference, n_candidates))
     for i in range(n_reference):
         for j in range(n_candidates):
-            correlation[i, j] = abs(np.corrcoef(reference[i], candidates[j])[0, 1])
+            signed_correlation[i, j] = np.corrcoef(reference[i], candidates[j])[0, 1]
+    absolute_correlation = np.abs(signed_correlation)
 
-    reference_indices, matched_indices = linear_sum_assignment(-correlation)
-    matched_correlations = correlation[reference_indices, matched_indices]
+    reference_indices, matched_indices = linear_sum_assignment(-absolute_correlation)
+    matched_correlations = absolute_correlation[reference_indices, matched_indices]
+    matched_signs = np.sign(signed_correlation[reference_indices, matched_indices])
+    matched_signs = np.where(matched_signs == 0, 1.0, matched_signs)
     return MatchResult(
         reference_indices=reference_indices,
         matched_indices=matched_indices,
         correlations=matched_correlations,
+        signs=matched_signs,
         mean_correlation=float(matched_correlations.mean()),
     )
 

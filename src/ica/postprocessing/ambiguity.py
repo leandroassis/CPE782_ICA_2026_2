@@ -106,7 +106,22 @@ def stable_permutation_order(Y: np.ndarray) -> np.ndarray:
 
 
 def resolve_ambiguities(Y: np.ndarray, domain: Domain) -> np.ndarray:
-    """Aplica escala -> sinal -> ordem cega estavel, nessa ordem (skill ica-evaluation, Secao 1).
+    """Aplica sinal -> escala -> ordem cega estavel, nessa ordem.
+
+    ``fix_sign`` roda **antes** de ``fix_scale``, e nao depois (apesar da
+    ordem "escala, sinal, ordem" da skill ica-evaluation, Secao 1, que trata
+    o sinal como independente da escala escolhida): a decisao de
+    :func:`fix_sign` e por assimetria (``skew``), invariante a qualquer
+    transformacao afim ``a*Y+b`` com ``a>0`` -- portanto identica antes ou
+    depois de ``fix_scale``. A ordem importa, porem, para o *dominio de
+    saida*: o rescale de imagem em :func:`fix_scale` estica cada componente
+    para ``[0, 1]`` via min-max; multiplicar esse resultado por ``-1``
+    (se aplicado depois) joga a componente para ``[-1, 0]``, fora da faixa
+    que a figura-vitrine e as metricas perceptuais (PSNR/SSIM, ``MAX=1``)
+    assumem -- exibida como preto solido pelo ``imshow(vmin=0, vmax=1)``.
+    Aplicando o sinal antes, o min-max de :func:`fix_scale` sempre recalcula
+    seu proprio min/max sobre a componente ja com sinal resolvido, entao a
+    saida cai sempre dentro da faixa do dominio, nunca fora dela.
 
     E o que popula ``ICAModel.sources_`` -- portanto tambem o que a
     figura-vitrine mostra. O casamento hungaro contra o gabarito
@@ -124,9 +139,9 @@ def resolve_ambiguities(Y: np.ndarray, domain: Domain) -> np.ndarray:
     Returns
     -------
     np.ndarray
-        Componentes com escala, sinal e ordem resolvidos.
+        Componentes com sinal, escala e ordem resolvidos.
     """
-    Y = fix_scale(Y, domain)
     Y = fix_sign(Y)
+    Y = fix_scale(Y, domain)
     order = stable_permutation_order(Y)
     return Y[order]

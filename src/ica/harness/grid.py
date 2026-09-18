@@ -365,8 +365,14 @@ def _rgb_composite_metrics(
 
     Casa os compostos por correlacao total (achatando os 3 canais) via
     casamento hungaro, reaproveitando a mesma logica de
-    :mod:`ica.postprocessing.matching`.
+    :mod:`ica.postprocessing.matching`. O sinal do composto recuperado
+    (um unico sinal para os 3 canais, ja que R/G/B de uma mesma imagem
+    compartilham a ambiguidade de sinal) e realinhado ao do composto
+    verdadeiro casado (:func:`~ica.metrics.image_metrics.align_sign_unit_interval`)
+    antes de medir PSNR/SSIM -- ver docstring de
+    :func:`~ica.postprocessing.ambiguity.resolve_ambiguities`.
     """
+    from ica.metrics.image_metrics import align_sign_unit_interval
     from ica.postprocessing.matching import hungarian_match
 
     true_flat = np.array([c.reshape(-1) for c in true_composites])
@@ -385,6 +391,7 @@ def _rgb_composite_metrics(
                 true_image.max() - true_image.min(), 1e-12
             )
             estimated_image = estimated_composite[channel].reshape(height, width)
+            estimated_image = align_sign_unit_interval(estimated_image, match.signs[i])
             per_channel_psnr.append(psnr(true_image, estimated_image))
             per_channel_ssim.append(ssim(true_image, estimated_image))
         psnr_values.append(float(np.mean(per_channel_psnr)))

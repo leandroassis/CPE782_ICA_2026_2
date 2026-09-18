@@ -244,22 +244,39 @@ def test_match_true_to_estimated_finds_permuted_pairs_by_correlation(rng):
         [true_b + rng.normal(scale=0.01, size=n), true_a + rng.normal(scale=0.01, size=n)]
     )
 
-    true_by_estimated, correlation_by_estimated = _match_true_to_estimated(
+    true_by_estimated, correlation_by_estimated, sign_by_estimated = _match_true_to_estimated(
         sources_true, sources_estimated
     )
 
     assert true_by_estimated == {0: 1, 1: 0}
     assert correlation_by_estimated[0] > 0.99
     assert correlation_by_estimated[1] > 0.99
+    assert sign_by_estimated[0] == 1.0
+    assert sign_by_estimated[1] == 1.0
 
 
 def test_match_true_to_estimated_returns_empty_dicts_without_ground_truth():
-    """Sem gabarito (reference=None), os dois dicts devem vir vazios."""
-    true_by_estimated, correlation_by_estimated = _match_true_to_estimated(
+    """Sem gabarito (reference=None), os tres dicts devem vir vazios."""
+    true_by_estimated, correlation_by_estimated, sign_by_estimated = _match_true_to_estimated(
         None, np.zeros((2, 10))
     )
     assert true_by_estimated == {}
     assert correlation_by_estimated == {}
+    assert sign_by_estimated == {}
+
+
+def test_match_true_to_estimated_flags_negative_sign_for_anti_correlated_pair(rng):
+    """Um par anti-correlacionado (a ICA inverteu o sinal) deve vir com sign=-1."""
+    n = 2000
+    true_a = rng.laplace(size=n)
+    sources_true = np.vstack([true_a, rng.uniform(-1.0, 1.0, size=n)])
+    sources_estimated = np.vstack(
+        [-true_a + rng.normal(scale=0.01, size=n), rng.normal(size=n)]
+    )
+
+    _, _, sign_by_estimated = _match_true_to_estimated(sources_true, sources_estimated)
+
+    assert sign_by_estimated[0] == -1.0
 
 
 def test_metrics_caption_ignores_non_numeric_and_nan_values():

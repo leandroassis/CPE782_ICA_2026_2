@@ -37,6 +37,26 @@ def test_distribution_metrics_battery_matches_and_orders_by_true_index(rng, make
         assert result.ks_statistic < 0.1
 
 
+def test_distribution_metrics_battery_corrects_sign_ambiguity_before_scoring(rng):
+    """Regressao: uma fonte assimetrica com sinal invertido deve pontuar bem, nao mal.
+
+    Para uma familia assimetrica (aqui, exponencial deslocada para media
+    zero), a versao espelhada (``-x``) tem KS alto contra a original --
+    exatamente o que a ambiguidade de sinal da ICA pode produzir. A bateria
+    deve realinhar o sinal (via ``MatchResult.signs``) antes do teste.
+    """
+    true_source = rng.exponential(size=5000)
+    true_source -= true_source.mean()
+    sign_flipped_estimate = -true_source.copy()
+
+    results = distribution_metrics_battery(
+        np.vstack([true_source, rng.laplace(size=5000)]),
+        np.vstack([sign_flipped_estimate, rng.laplace(size=5000)]),
+    )
+
+    assert results[0].ks_statistic < 0.05
+
+
 class _FakeModel:
     def __init__(self, sources_true, sources, domain):
         self.sources_true_ = sources_true

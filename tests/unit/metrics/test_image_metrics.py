@@ -2,7 +2,14 @@
 
 import numpy as np
 
-from ica.metrics.image_metrics import PSNRMetric, SSIMMetric, image_metrics_battery, psnr, ssim
+from ica.metrics.image_metrics import (
+    PSNRMetric,
+    SSIMMetric,
+    align_sign_unit_interval,
+    image_metrics_battery,
+    psnr,
+    ssim,
+)
 
 
 def test_psnr_is_infinite_for_identical_images():
@@ -48,6 +55,36 @@ def test_image_metrics_battery_matches_and_orders_by_true_index(rng):
     for psnr_value, ssim_value in battery:
         assert psnr_value > 30
         assert ssim_value > 0.95
+
+
+def test_align_sign_unit_interval_undoes_photographic_negative():
+    """sign=-1 deve desfazer o negativo fotografico (1-x), nao negar (-x)."""
+    value = np.array([0.0, 0.25, 0.8, 1.0])
+    assert np.allclose(align_sign_unit_interval(value, sign=1.0), value)
+    assert np.allclose(align_sign_unit_interval(value, sign=-1.0), 1.0 - value)
+
+
+def test_image_metrics_battery_corrects_sign_ambiguity_before_scoring(rng):
+    """Uma componente correta mas com sinal invertido deve pontuar quase perfeito.
+
+    Reproduz o bug real: apos resolve_ambiguities, uma fonte-imagem
+    corretamente separada mas com a ambiguidade de sinal da ICA resolvida
+    "ao contrario" vira o negativo fotografico da fonte verdadeira (mesma
+    informacao, PSNR/SSIM antes desta correcao penalizavam isso como se
+    fosse uma separacao ruim).
+    """
+    height, width = 8, 8
+    n_pixels = height * width
+    true_image = rng.uniform(size=n_pixels)
+    sources_true = np.vstack([true_image, rng.uniform(size=n_pixels)])
+    photographic_negative = 1.0 - true_image
+    sources_estimated = np.vstack([photographic_negative, rng.uniform(size=n_pixels)])
+
+    battery = image_metrics_battery(sources_true, sources_estimated, height, width)
+
+    psnr_value, ssim_value = battery[0]
+    assert psnr_value > 30
+    assert ssim_value > 0.95
 
 
 class _FakeModel:
