@@ -1,6 +1,6 @@
 """Metrica: log-verossimilhanca media atingida ao final do ajuste.
 
-Ver context/ICA_BACKGROUND.md, Secao 3.2.
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secao 2.
 """
 
 from __future__ import annotations

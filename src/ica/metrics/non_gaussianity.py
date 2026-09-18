@@ -1,7 +1,7 @@
 """Metrica: nao-gaussianidade (curtose de Fisher) de cada fonte recuperada.
 
-Ver context/ICA_BACKGROUND.md, Secao 1.2; context/TASK_DESCRIPTION.md
-("metricas de nao gaussianidade").
+Ver ``.claude/skills/bss-assessment/references/higher-order-theory.md``,
+Secao 4 (sinal da curtose excedente).
 """
 
 from __future__ import annotations

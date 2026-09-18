@@ -13,4 +13,7 @@ htmlcov/
 .coverage
 
 todo
-data
+/data
+
+CLAUDE.md
+.claude

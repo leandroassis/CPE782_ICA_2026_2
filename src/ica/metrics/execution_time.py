@@ -1,7 +1,4 @@
-"""Metrica: tempo de execucao do algoritmo de ICA.
-
-Ver context/TASK_DESCRIPTION.md ("tempo de execucao").
-"""
+"""Metrica: tempo de execucao do algoritmo de ICA."""
 
 from __future__ import annotations
 

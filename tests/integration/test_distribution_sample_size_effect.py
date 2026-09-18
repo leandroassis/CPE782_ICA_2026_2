@@ -1,9 +1,9 @@
 """Teste de integracao: efeito do tamanho amostral na qualidade da separacao.
 
-Ver context/TASK_DESCRIPTION.md ("compara como o tamanho da amostra
-afeta a qualidade da separacao"). Usa CSVs no formato real de
-``data/dist/`` (um arquivo ``mix_{T}_stats.csv`` por tamanho amostral),
-nunca os dados reais do trabalho.
+Compara a mesma mistura subamostrada em T diferentes -- hook do estudo de
+influencia de T (``.claude/PIPELINE_MAP.md``, deferido). Usa CSVs no
+formato real de ``data/mix/dist/`` (um arquivo ``mix_{T}_stats.csv`` por
+tamanho amostral), nunca os dados reais do trabalho.
 """
 
 import numpy as np

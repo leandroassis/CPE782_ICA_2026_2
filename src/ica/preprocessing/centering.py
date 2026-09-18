@@ -1,6 +1,6 @@
 """Centralizacao (subtracao da media amostral).
 
-Ver context/ICA_BACKGROUND.md, Secao 2.1.
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secao 6 ("pre-requisitos comuns").
 """
 
 import numpy as np

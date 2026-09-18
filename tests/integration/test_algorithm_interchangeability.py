@@ -1,7 +1,4 @@
-"""Teste de integracao: os 3 ICAAlgorithm sao intercambiaveis (Liskov Substitution).
-
-Ver context/DEVELOPMENT_GUIDELINES.md, Secao 3 ("L -- Liskov Substitution").
-"""
+"""Teste de integracao: os 3 ICAAlgorithm sao intercambiaveis (Liskov Substitution)."""
 
 import pytest
 

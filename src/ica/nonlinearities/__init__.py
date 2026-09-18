@@ -1,6 +1,6 @@
 """Funcoes de pontuacao (score functions) sub/supergaussianas e adaptativa.
 
-Ver context/ICA_BACKGROUND.md, Secao 3.3-3.4.
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secoes 3-5.
 """
 
 from ica.nonlinearities.adaptive import AdaptiveScore

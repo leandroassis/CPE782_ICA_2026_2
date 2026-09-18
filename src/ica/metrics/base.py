@@ -1,14 +1,9 @@
-"""Interface base para metricas de avaliacao de um ICAModel ajustado.
-
-Ver context/DEVELOPMENT_GUIDELINES.md, Secao 2.6.
-"""
+"""Interface base para metricas de avaliacao de um ICAModel ajustado."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
-
-import numpy as np
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ica.model import ICAModel
@@ -26,7 +21,7 @@ class Metric(ABC):
     name: str
 
     @abstractmethod
-    def compute(self, model: ICAModel) -> float | np.ndarray:
+    def compute(self, model: ICAModel) -> Any:
         """Calcula a metrica a partir do estado de um ICAModel ajustado.
 
         Parameters
@@ -36,6 +31,10 @@ class Metric(ABC):
 
         Returns
         -------
-        float or np.ndarray
-            Valor da metrica.
+        Any
+            Valor da metrica -- tipicamente ``float`` ou ``np.ndarray``,
+            mas metricas de validacao (Amari, SIR/SDR, PSNR/SSIM, KS/AD,
+            identificacao de familia) podem devolver ``None`` (sem
+            gabarito disponivel) ou uma lista de resultados estruturados
+            (um por fonte).
         """

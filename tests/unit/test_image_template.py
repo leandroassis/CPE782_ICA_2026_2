@@ -1,14 +1,19 @@
-"""Testes unitarios para ImageTemplate (DEVELOPMENT_GUIDELINES.md, Secao 2.1).
+"""Testes unitarios para ImageTemplate.
 
 Usa CSVs sinteticos em ``tmp_path``, no formato real de
-``data/imagens/``, nunca os dados reais do trabalho.
+``data/mix/imagens/``, exceto quando explicitamente indicado que o teste
+verifica algo contra os dados reais do trabalho (``data/groundtruth/``).
 """
+
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from ica.data.image_template import ImageTemplate
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _write_grayscale_csv(run_dir, n_pixels=16, n_mixtures=3):
@@ -24,11 +29,14 @@ def _write_rgb_csv(run_dir, n_pixels=16, n_mixtures=9):
 
 
 def test_load_returns_mixtures_by_pixels_shape(tmp_path):
-    """load() deve retornar X com shape (n_misturas, n_pixels), transposto do CSV."""
+    """load() deve retornar um SignalMatrix com data shape (n_misturas, n_pixels)."""
     _write_grayscale_csv(tmp_path / "run1", n_pixels=16, n_mixtures=3)
     template = ImageTemplate(run="run1", data_root=tmp_path)
-    X = template.load()
-    assert X.shape == (3, 16)
+    signal_matrix = template.load()
+    assert signal_matrix.data.shape == (3, 16)
+    assert signal_matrix.domain == "image"
+    assert signal_matrix.meta["is_rgb"] is False
+    assert signal_matrix.meta["n_images"] == 3
 
 
 def test_is_rgb_detection_from_filename(tmp_path):
@@ -117,3 +125,81 @@ def test_discover_runs_finds_both_grayscale_and_rgb(tmp_path):
 def test_discover_runs_returns_empty_list_for_missing_directory(tmp_path):
     """discover_runs nao deve levantar excecao se data_root nao existir."""
     assert ImageTemplate.discover_runs(tmp_path / "does_not_exist") == []
+
+
+def test_mode_b_plane_matrices_groups_by_channel(tmp_path):
+    """mode_b_plane_matrices deve devolver 3 matrizes (n_images, n_pixels), uma por canal."""
+    n_pixels = 4
+    run_dir = tmp_path / "run3"
+    run_dir.mkdir(parents=True)
+    # 3 imagens x 3 canais = 9 misturas; cada mistura e uma constante para
+    # que o agrupamento seja facil de verificar por valor.
+    data = {f"mistura{i + 1}": np.full(n_pixels, i, dtype=float) for i in range(9)}
+    pd.DataFrame(data).to_csv(run_dir / "mix_imagens_rgb.csv", index=False)
+
+    template = ImageTemplate(run="run3", data_root=tmp_path)
+    planes = template.mode_b_plane_matrices()
+
+    assert len(planes) == 3
+    for plane in planes:
+        assert plane.shape == (3, n_pixels)
+    # canal R (indice 0): misturas 0, 3, 6 -> imagens 0, 1, 2
+    assert np.allclose(planes[0][:, 0], [0, 3, 6])
+    # canal G (indice 1): misturas 1, 4, 7
+    assert np.allclose(planes[1][:, 0], [1, 4, 7])
+    # canal B (indice 2): misturas 2, 5, 8
+    assert np.allclose(planes[2][:, 0], [2, 5, 8])
+
+
+def test_mode_b_plane_matrices_rejects_grayscale(tmp_path):
+    """mode_b_plane_matrices so se aplica a RGB."""
+    _write_grayscale_csv(tmp_path / "run1")
+    template = ImageTemplate(run="run1", data_root=tmp_path)
+    with pytest.raises(ValueError):
+        template.mode_b_plane_matrices()
+
+
+def test_mode_c_matrix_concatenates_channels_per_image(tmp_path):
+    """mode_c_matrix deve concatenar R,G,B de cada imagem numa linha de comprimento 3P."""
+    n_pixels = 4
+    run_dir = tmp_path / "run3"
+    run_dir.mkdir(parents=True)
+    data = {f"mistura{i + 1}": np.full(n_pixels, i, dtype=float) for i in range(9)}
+    pd.DataFrame(data).to_csv(run_dir / "mix_imagens_rgb.csv", index=False)
+
+    template = ImageTemplate(run="run3", data_root=tmp_path)
+    matrix = template.mode_c_matrix()
+
+    assert matrix.shape == (3, 3 * n_pixels)
+    # imagem 0 (misturas 0,1,2) concatenadas
+    assert np.allclose(matrix[0], np.repeat([0, 1, 2], n_pixels))
+
+
+def test_load_ground_truth_returns_none_when_run_missing(tmp_path):
+    """load_ground_truth deve tolerar a ausencia do diretorio de gabarito."""
+    _write_grayscale_csv(tmp_path / "run1")
+    template = ImageTemplate(run="run1", data_root=tmp_path)
+    mixing_matrix_true, sources_true = template.load_ground_truth(tmp_path / "does_not_exist")
+    assert mixing_matrix_true is None
+    assert sources_true is None
+
+
+def test_load_ground_truth_against_real_rgb_run():
+    """O agrupamento consecutivo-por-imagem deve bater com o gabarito real de run3.
+
+    ``data/groundtruth/imagens/run3/sources_imagens_rgb.csv`` tem cabecalho
+    ``Cachorro_R,Cachorro_G,Cachorro_B,Gato_R,...`` -- confirma que os
+    canais de uma mesma imagem sao consecutivos, a mesma convencao usada
+    por :meth:`mode_b_plane_matrices`/:meth:`mode_c_matrix`.
+    """
+    data_root = _REPO_ROOT / "data" / "mix" / "imagens"
+    groundtruth_root = _REPO_ROOT / "data" / "groundtruth" / "imagens"
+    if not (data_root / "run3").exists():
+        pytest.skip("dados reais de data/mix/imagens/run3 nao disponiveis")
+
+    template = ImageTemplate(run="run3", data_root=data_root)
+    mixing_matrix_true, sources_true = template.load_ground_truth(groundtruth_root)
+
+    assert mixing_matrix_true.shape == (9, 9)
+    assert sources_true.shape[0] == 9
+    assert template.n_mixtures == 9

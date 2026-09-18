@@ -1,4 +1,4 @@
-"""Testes unitarios para ICAModel (DEVELOPMENT_GUIDELINES.md, Secao 2.5).
+"""Testes unitarios para ICAModel.
 
 Colaboradores completamente mockados: verifica apenas a orquestracao do
 fluxo fit()/evaluate(), nao a matematica real de ICA (ja coberta pelos
@@ -7,19 +7,21 @@ testes de ``algorithms/`` e ``integration/``).
 
 import numpy as np
 
+from ica.interfaces import SignalMatrix
 from ica.model import ICAModel
+from ica.postprocessing.ambiguity import resolve_ambiguities
 
 
 class _FakeDataTemplate:
-    """Duble: retorna uma matriz de misturas fixa."""
+    """Duble: retorna uma matriz de misturas fixa, envolvida num SignalMatrix."""
 
     def __init__(self, X: np.ndarray) -> None:
         self._X = X
         self.load_call_count = 0
 
-    def load(self) -> np.ndarray:
+    def load(self) -> SignalMatrix:
         self.load_call_count += 1
-        return self._X
+        return SignalMatrix(data=self._X, domain="distribution", meta={})
 
 
 class _FakePipelineWithoutWhitening:
@@ -106,12 +108,14 @@ def test_fit_calls_collaborators_in_order_and_wires_outputs():
 
 
 def test_fit_reconstructs_sources_from_reconstruction_transform_of_original_mixtures():
-    """sources_ deve vir de unmixing_matrix_ @ pipeline.reconstruction_transform(mixtures_).
+    """sources_ deve vir de resolve_ambiguities(B @ reconstruction_transform(mixtures_)).
 
     Nao de ``preprocessed_`` diretamente -- distincao introduzida para
-    suportar passos ``estimation_only`` como TemporalFiltering (livro-texto,
-    Secao 13.1): a reconstrucao final deve partir sempre dos dados
-    originais, mesmo que a estimacao de B tenha usado dados filtrados.
+    suportar passos ``estimation_only``: a reconstrucao final deve partir
+    sempre dos dados originais, mesmo que a estimacao de B tenha usado
+    dados filtrados. A resolucao de ambiguidades (escala/sinal/ordem, skill
+    ica-evaluation Secao 1) e aplicada por cima -- por isso a comparacao e
+    contra ``resolve_ambiguities(...)``, nao contra o produto cru.
     """
     X = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
     data = _FakeDataTemplate(X)
@@ -122,7 +126,8 @@ def test_fit_reconstructs_sources_from_reconstruction_transform_of_original_mixt
     model = ICAModel(data=data, pipeline=pipeline, algorithm=algorithm).fit()
 
     assert np.array_equal(pipeline.reconstruction_transform_calls[0], X)
-    assert np.array_equal(model.sources_, B @ (X + 10.0))
+    expected = resolve_ambiguities(B @ (X + 10.0), domain="distribution")
+    assert np.array_equal(model.sources_, expected)
 
 
 def test_fit_full_unmixing_matrix_delegates_to_pipeline_compose_linear_matrix():
@@ -166,6 +171,44 @@ def test_fit_copies_algorithm_diagnostics_onto_model():
     assert model.converged_ == algorithm.converged_
     assert model.n_iterations_ == algorithm.n_iterations_
     assert model.elapsed_time_ == algorithm.elapsed_time_
+
+
+def test_fit_leaves_ground_truth_none_without_groundtruth_root():
+    """Sem groundtruth_root, mixing_matrix_true_/sources_true_ devem ficar None."""
+    X = np.eye(2)
+    data = _FakeDataTemplate(X)
+    pipeline = _FakePipelineWithoutWhitening()
+    algorithm = _FakeAlgorithm(np.eye(2))
+
+    model = ICAModel(data=data, pipeline=pipeline, algorithm=algorithm).fit()
+
+    assert model.mixing_matrix_true_ is None
+    assert model.sources_true_ is None
+
+
+def test_fit_populates_ground_truth_when_root_is_given():
+    """Com groundtruth_root, fit() deve chamar data.load_ground_truth(root) e guardar o resultado.
+
+    O resultado fica em ``mixing_matrix_true_``/``sources_true_``.
+    """
+
+    class _FakeDataTemplateWithGroundTruth(_FakeDataTemplate):
+        def load_ground_truth(self, groundtruth_root):
+            self.groundtruth_root_received = groundtruth_root
+            return np.eye(2), np.zeros((2, 3))
+
+    X = np.eye(2)
+    data = _FakeDataTemplateWithGroundTruth(X)
+    pipeline = _FakePipelineWithoutWhitening()
+    algorithm = _FakeAlgorithm(np.eye(2))
+
+    model = ICAModel(
+        data=data, pipeline=pipeline, algorithm=algorithm, groundtruth_root="fake/root"
+    ).fit()
+
+    assert data.groundtruth_root_received == "fake/root"
+    assert np.array_equal(model.mixing_matrix_true_, np.eye(2))
+    assert model.sources_true_.shape == (2, 3)
 
 
 def test_evaluate_calls_each_metric_and_wires_dict_by_name():

@@ -1,8 +1,9 @@
 """Reducao de dimensionalidade por Analise de Componentes Principais (PCA).
 
-Ver livro-texto (Hyvarinen, Karhunen & Oja), Secao 13.2 (paginas 267-269);
-ver tambem context/ICA_BACKGROUND.md, Secao 2.2 (a mesma decomposicao em
-autovalores/autovetores usada pelo branqueamento).
+Ver livro-texto (Hyvarinen, Karhunen & Oja), Secao 13.2 (paginas 267-269) --
+a mesma decomposicao em autovalores/autovetores usada pelo branqueamento
+(``.claude/skills/ica-ml/SKILL.md``, Secao 6). Gancho exposto e off por
+padrao (``.claude/PIPELINE_MAP.md``, bloco ``preprocess/``).
 """
 
 import numpy as np

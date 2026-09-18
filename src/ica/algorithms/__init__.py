@@ -1,6 +1,6 @@
 """Algoritmos de otimizacao para ICA por Maxima Verossimilhanca / Infomax.
 
-Ver context/ICA_BACKGROUND.md, Secao 4.
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secao 6, e ``references/algorithms.md``.
 """
 
 from ica.algorithms.base import ICAAlgorithm

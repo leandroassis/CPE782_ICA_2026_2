@@ -1,10 +1,13 @@
 """Teste de integracao (smoke): CLI completa (ica.cli.main) para os 3 tipos de amostra.
 
 Usa arvores de arquivos sinteticas em ``tmp_path``, no formato real de
-``data/``, nunca os dados reais do trabalho. Nao valida qualidade de
-separacao (ja coberta por outros testes de integracao) -- apenas que a
-CLI executa de ponta a ponta e produz os artefatos esperados.
+``data/mix/``+``data/groundtruth/``, nunca os dados reais do trabalho. Nao
+valida qualidade de separacao (ja coberta por outros testes de integracao)
+-- apenas que a CLI executa de ponta a ponta e produz os artefatos da
+figura-vitrine (skill ica-evaluation, Secao 6).
 """
+
+import json
 
 import numpy as np
 import pandas as pd
@@ -19,7 +22,7 @@ def _write_mixture_csv(path, n_mixtures, n_rows, rng):
 
 
 def test_cli_smoke_imagens(tmp_path):
-    """CLI deve rodar de ponta a ponta para --sample imagens e gerar metrics.json + PNGs."""
+    """CLI deve rodar de ponta a ponta para --sample imagens e gerar metrics.json + a vitrine."""
     rng = np.random.default_rng(0)
     run_dir = tmp_path / "imagens" / "run1"
     run_dir.mkdir(parents=True)
@@ -45,14 +48,15 @@ def test_cli_smoke_imagens(tmp_path):
 
     assert exit_code == 0
     assert (output_dir / "metrics.json").exists()
-    assert (output_dir / "imagens_misturas_vs_fontes.png").exists()
-    assert (output_dir / "diagrama_de_mistura.png").exists()
-    assert (output_dir / "log_verossimilhanca.png").exists()
-    assert (output_dir / "nuvem_3d_misturas_vs_fontes.png").exists()
+    assert (output_dir / "winner.json").exists()
+    assert (output_dir / "vitrine_imagens.png").exists()
+    winner = json.loads((output_dir / "winner.json").read_text())
+    assert winner["algorithm"] == "fastica_ml"
+    assert winner["mode"] == "A"
 
 
 def test_cli_smoke_dist(tmp_path):
-    """CLI deve rodar de ponta a ponta para --sample dist e gerar metrics.json + histogramas."""
+    """CLI deve rodar de ponta a ponta para --sample dist e gerar metrics.json + a vitrine."""
     rng = np.random.default_rng(0)
     run_dir = tmp_path / "dist" / "run1"
     run_dir.mkdir(parents=True)
@@ -80,10 +84,7 @@ def test_cli_smoke_dist(tmp_path):
 
     assert exit_code == 0
     assert (output_dir / "metrics.json").exists()
-    assert (output_dir / "histogramas_misturas_vs_fontes.png").exists()
-    assert (output_dir / "diagrama_de_mistura.png").exists()
-    assert (output_dir / "log_verossimilhanca.png").exists()
-    assert (output_dir / "nuvem_3d_misturas_vs_fontes.png").exists()
+    assert (output_dir / "vitrine_distribuicoes.png").exists()
 
 
 def test_cli_smoke_audio(tmp_path):
@@ -115,7 +116,38 @@ def test_cli_smoke_audio(tmp_path):
 
     assert exit_code == 0
     assert (output_dir / "metrics.json").exists()
-    assert (output_dir / "audio_formas_de_onda_e_espectrogramas.png").exists()
-    assert (output_dir / "fonte_recuperada_1.wav").exists()
-    assert (output_dir / "fonte_recuperada_2.wav").exists()
-    assert (output_dir / "log_verossimilhanca.png").exists()
+    assert (output_dir / "vitrine_audio_espectros.png").exists()
+    assert (output_dir / "fonte_separada_1.wav").exists()
+    assert (output_dir / "fonte_separada_2.wav").exists()
+
+
+def test_cli_smoke_full_grid_selects_a_winner(tmp_path):
+    """Sem --algorithm, a CLI deve rodar a grade completa (3 algoritmos) e escolher um vencedor."""
+    rng = np.random.default_rng(0)
+    run_dir = tmp_path / "dist" / "run1"
+    run_dir.mkdir(parents=True)
+    _write_mixture_csv(run_dir / "mix_100_stats.csv", n_mixtures=2, n_rows=200, rng=rng)
+
+    output_dir = tmp_path / "output"
+    exit_code = main(
+        [
+            "--sample",
+            "dist",
+            "--run",
+            "run1",
+            "--sample-size",
+            "100",
+            "--max-iterations",
+            "50",
+            "--data-root",
+            str(tmp_path),
+            "--output-dir",
+            str(output_dir),
+            "--max-workers",
+            "2",
+        ]
+    )
+
+    assert exit_code == 0
+    metrics = json.loads((output_dir / "metrics.json").read_text())
+    assert set(metrics) == {"natural_gradient/unico", "bell_sejnowski/unico", "fastica_ml/unico"}

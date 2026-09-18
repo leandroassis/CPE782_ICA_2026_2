@@ -1,6 +1,9 @@
 """Teste de integracao: chaveamento adaptativo importa fim-a-fim com fontes mistas.
 
-Ver context/ICA_BACKGROUND.md, Secao 3.4; context/DEVELOPMENT_GUIDELINES.md, Secao 5.
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secao 5 (chaveamento) e Secao 6
+(GN/BS exigem o chaveamento explicito; FastICA-ML nao -- ``diag(beta_i)``
+absorve a natureza da fonte, por isso o teste usa Gradiente Natural, no qual
+o efeito de uma nao-linearidade fixa errada e mensuravel).
 """
 
 import numpy as np
@@ -14,21 +17,17 @@ from ica.preprocessing.pipeline import Pipeline
 from ica.preprocessing.whitening import Whitening
 
 
-def test_adaptive_score_succeeds_where_fixed_wrong_nonlinearity_diverges(
+def test_adaptive_score_beats_fixed_wrong_nonlinearity(
     rng, make_sources, make_mixing_matrix, best_match_correlation, array_data_template
 ):
-    """Com 1 fonte Laplaciana + 1 Uniforme, AdaptiveScore deve separar bem.
+    """Com 1 fonte Laplaciana + 1 Uniforme, AdaptiveScore deve superar g_- fixa.
 
-    Uma unica nao-linearidade fixa errada para ambas (``SubGaussianScore``
-    aplicada tambem a componente supergaussiana) deve divergir -- prova,
-    atraves da fachada completa :class:`~ica.model.ICAModel`, que o
-    chaveamento por componente (ICA_BACKGROUND.md, Secao 3.4) nao e um
-    detalhe cosmetico.
-
-    Usa ``learning_rate=0.001`` explicitamente (maior que o default de
-    ``NaturalGradientICA``, ``0.0005``) para tornar a divergencia visivel
-    de forma confiavel -- o default mais conservador existe justamente
-    para evitar essa instabilidade na pratica.
+    ``AdaptiveScore`` chaveia por componente via o momento nao-polinomial
+    ``m_i`` (skill ica-ml, Secao 5) e escolhe, para cada uma, o ramo que
+    satisfaz a condicao de estabilidade do Teor. 9.1. Forcar
+    ``SubGaussianScore`` também sobre a componente supergaussiana (a
+    Laplaciana) viola essa condicao para ela e degrada a qualidade da
+    separacao de forma mensuravel e reprodutivel entre sementes.
     """
     S = make_sources(["laplace", "uniform"], 3000, rng)
     A = make_mixing_matrix(rng, 2)
@@ -42,8 +41,6 @@ def test_adaptive_score_succeeds_where_fixed_wrong_nonlinearity_diverges(
         ),
     )
     adaptive_model.fit()
-    assert np.all(np.isfinite(adaptive_model.sources_))
-    assert best_match_correlation(S, adaptive_model.sources_) > 0.9
 
     wrong_model = ICAModel(
         data=array_data_template(X),
@@ -54,4 +51,11 @@ def test_adaptive_score_succeeds_where_fixed_wrong_nonlinearity_diverges(
     )
     with np.errstate(all="ignore"):
         wrong_model.fit()
-    assert not np.all(np.isfinite(wrong_model.sources_))
+
+    assert np.all(np.isfinite(adaptive_model.sources_))
+    adaptive_quality = best_match_correlation(S, adaptive_model.sources_)
+    assert adaptive_quality > 0.9
+
+    if np.all(np.isfinite(wrong_model.sources_)):
+        wrong_quality = best_match_correlation(S, wrong_model.sources_)
+        assert adaptive_quality > wrong_quality

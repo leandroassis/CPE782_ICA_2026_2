@@ -16,25 +16,33 @@ install:
 test:
     {{python}} -m pytest tests/ --cov=src/ica --cov-report=term-missing
 
-# Executa o pipeline de ICA sobre um run (argumentos posicionais, ex:
-# just run imagens run1 bell_sejnowski). sample_size so e usado quando sample=dist.
-run sample="imagens" run="run1" algorithm="fastica_ml" sample_size="100000":
-    {{python}} -m ica --sample {{sample}} --run {{run}} --algorithm {{algorithm}} \
+# Executa a grade de ICA-ML (3 algoritmos x modos de condicionamento
+# aplicaveis) sobre um run e mostra a melhor separacao (argumentos
+# posicionais, ex: just run imagens run1). algorithm="" roda a grade
+# completa; informe um algoritmo (ex.: bell_sejnowski) para rodar so ele.
+# sample_size so e usado quando sample=dist.
+run sample="imagens" run="run1" algorithm="" sample_size="100000":
+    {{python}} -m ica --sample {{sample}} --run {{run}} \
+        {{ if algorithm != "" { "--algorithm " + algorithm } else { "" } }} \
         {{ if sample == "dist" { "--sample-size " + sample_size } else { "" } }}
 
-# Executa o pipeline de ICA sobre todos os runs de um tipo de amostra
-# (argumentos posicionais, ex: just run-all audio natural_gradient)
-run-all sample="imagens" algorithm="fastica_ml" sample_size="100000":
+# Executa a grade de ICA-ML sobre todos os runs de um tipo de amostra
+# (argumentos posicionais, ex: just run-all audio). Ver `run` para algorithm.
+run-all sample="imagens" algorithm="" sample_size="100000":
     #!/usr/bin/env bash
     set -uo pipefail
     runs=$({{python}} -m ica --sample {{sample}} --list-runs)
+    algorithm_flag=""
+    if [ -n "{{algorithm}}" ]; then
+        algorithm_flag="--algorithm {{algorithm}}"
+    fi
     failed=""
     for run in $runs; do
         echo "=== {{sample}} / $run (algorithm={{algorithm}}) ==="
         if [ "{{sample}}" = "dist" ]; then
-            {{python}} -m ica --sample {{sample}} --run "$run" --algorithm {{algorithm}} --sample-size {{sample_size}} || failed="$failed $run"
+            {{python}} -m ica --sample {{sample}} --run "$run" $algorithm_flag --sample-size {{sample_size}} || failed="$failed $run"
         else
-            {{python}} -m ica --sample {{sample}} --run "$run" --algorithm {{algorithm}} || failed="$failed $run"
+            {{python}} -m ica --sample {{sample}} --run "$run" $algorithm_flag || failed="$failed $run"
         fi
         echo ""
     done

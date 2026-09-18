@@ -1,7 +1,4 @@
-"""Metrica: numero de iteracoes ate a convergencia (ou o limite maximo).
-
-Ver context/TASK_DESCRIPTION.md ("quantidade de iteracoes necessarias para convergir").
-"""
+"""Metrica: numero de iteracoes ate a convergencia (ou o limite maximo)."""
 
 from __future__ import annotations
 

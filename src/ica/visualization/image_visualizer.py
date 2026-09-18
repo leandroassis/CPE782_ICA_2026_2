@@ -1,7 +1,4 @@
-"""Visualizacao qualitativa de imagens: grade de misturas vs. fontes recuperadas.
-
-Ver context/TASK_DESCRIPTION.md ("clareza das imagens recuperadas").
-"""
+"""Visualizacao qualitativa de imagens: grade de misturas vs. fontes recuperadas."""
 
 from __future__ import annotations
 

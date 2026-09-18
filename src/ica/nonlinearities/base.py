@@ -1,6 +1,6 @@
 """Interface base para funcoes de pontuacao (score functions).
 
-Ver context/ICA_BACKGROUND.md, Secao 3.3-3.4.
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secoes 3-5.
 """
 
 from abc import ABC, abstractmethod
@@ -9,13 +9,16 @@ import numpy as np
 
 
 class NonlinearityTemplate(ABC):
-    """Funcao de pontuacao ``g_i(s) = -d/ds log(p_suposta(s))`` da estimacao ML/Infomax.
+    """Funcao de pontuacao ``g_i(s) = (log p_suposta(s))'`` da estimacao ML/Infomax.
 
-    Cada implementacao concreta corresponde a uma densidade suposta
-    diferente para as fontes (ICA_BACKGROUND.md, Secao 3.3). Pelo Teorema
-    da consistencia local (Secao 3.3), a densidade suposta nao precisa ser
-    exata -- basta que ``g_i`` opere no lado correto da nao-gaussianidade
-    da fonte.
+    Convencao do livro (Hyvarinen, Karhunen & Oja, Cap. 9), **sem** sinal
+    negativo na frente -- ver skill ``ica-ml``, aviso de convencao. Cada
+    implementacao concreta corresponde a uma densidade suposta diferente
+    para as fontes. Pelo Teorema da consistencia local (Teor. 9.1: o
+    estimador ML e localmente consistente se
+    ``E{s_i g_i(s_i) - g_i'(s_i)} > 0``), a densidade suposta nao precisa
+    ser exata -- basta que ``g_i`` opere no lado correto da
+    nao-gaussianidade da fonte.
     """
 
     @abstractmethod

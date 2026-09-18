@@ -1,11 +1,13 @@
 """Branqueamento (whitening) via decomposicao em autovalores da covariancia.
 
-Ver context/ICA_BACKGROUND.md, Secao 2.2.
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secao 6 (branqueamento como
+pre-requisito comum dos 3 algoritmos).
 """
 
 import numpy as np
 
 from ica.preprocessing.base import PreprocessingStep
+from ica.preprocessing.symmetric import pca_whitening_matrices
 
 
 class Whitening(PreprocessingStep):
@@ -13,8 +15,10 @@ class Whitening(PreprocessingStep):
 
     Implementa ``V = D^(-1/2) E^T``, onde ``E`` e ``D`` vem da decomposicao
     em autovalores/autovetores (EVD) da covariancia
-    ``C_x = (1/T) X X^T`` (ICA_BACKGROUND.md, Secao 2.2, Eq. 6.33 do
-    livro-texto). Assume que X ja esta centralizado (media zero); aplicar
+    ``C_x = (1/T) X X^T`` (skill ``ica-ml``, ``references/algorithms.md``,
+    "pre-requisitos comuns"), via :func:`~ica.preprocessing.symmetric.pca_whitening_matrices`
+    -- a mesma rotina de raiz-inversa reaproveitada pela projecao do
+    FastICA-ML. Assume que X ja esta centralizado (media zero); aplicar
     :class:`~ica.preprocessing.centering.Centering` antes e
     responsabilidade de quem compoe o
     :class:`~ica.preprocessing.pipeline.Pipeline`.
@@ -52,11 +56,7 @@ class Whitening(PreprocessingStep):
         """
         n_samples = X.shape[1]
         covariance = (X @ X.T) / n_samples
-        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
-        inverse_sqrt_eigenvalues = 1.0 / np.sqrt(eigenvalues)
-        sqrt_eigenvalues = np.sqrt(eigenvalues)
-        self.whitening_matrix_ = inverse_sqrt_eigenvalues[:, np.newaxis] * eigenvectors.T
-        self.dewhitening_matrix_ = eigenvectors * sqrt_eigenvalues[np.newaxis, :]
+        self.whitening_matrix_, self.dewhitening_matrix_ = pca_whitening_matrices(covariance)
         return self
 
     @property

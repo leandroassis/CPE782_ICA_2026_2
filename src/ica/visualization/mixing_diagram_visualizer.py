@@ -1,11 +1,10 @@
 """Diagrama de mistura: scatter pairwise das misturas e das fontes recuperadas.
 
-Ver context/TASK_DESCRIPTION.md ("diagramas de mistura"). Este diagnostico
-nao depende da matriz de mistura A verdadeira -- a passagem de um
-diagrama correlacionado (misturas, ex.: paralelogramo/losango, ver
-ICA_BACKGROUND.md Secao 1) para eixos alinhados (fontes independentes) e
+Este diagnostico nao depende da matriz de mistura A verdadeira -- a
+passagem de um diagrama correlacionado (misturas, ex.:
+paralelogramo/losango) para eixos alinhados (fontes independentes) e
 visivel diretamente nos dados observados e recuperados. Por isso e
-produzido para todo run, inclusive os reais, que nao tem gabarito.
+produzido para qualquer run, com ou sem gabarito disponivel.
 """
 
 from __future__ import annotations

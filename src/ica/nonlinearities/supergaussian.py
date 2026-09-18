@@ -1,6 +1,6 @@
 """Funcao de pontuacao para fontes supergaussianas (caudas pesadas).
 
-Ver context/ICA_BACKGROUND.md, Secao 3.4.
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secoes 3-4.
 """
 
 import numpy as np
@@ -9,13 +9,17 @@ from ica.nonlinearities.base import NonlinearityTemplate
 
 
 class SuperGaussianScore(NonlinearityTemplate):
-    """``g_+(s) = 2 tanh(s)``, derivada da densidade log-suposta para caudas pesadas.
+    """``g_+(s) = -2 tanh(s)``, funcao de pontuacao para caudas pesadas (livro, eq. 9.18).
 
-    Adequada para fontes como a Laplaciana (ICA_BACKGROUND.md, Secao 3.4).
+    Densidade log suposta: ``log p_+(s) = -log(2) - 2 log(cosh(s))`` (a
+    densidade logistica padrao, propriamente normalizada). A convencao do
+    pacote e ``g = (log p_suposta)'`` -- **sem** sinal negativo na frente
+    (Hyvarinen, Karhunen & Oja, Cap. 9); adequada para fontes como a
+    Laplaciana.
     """
 
     def score(self, y: np.ndarray) -> np.ndarray:
-        """``g_+(y) = 2 tanh(y)``.
+        """``g_+(y) = -2 tanh(y)``.
 
         Parameters
         ----------
@@ -25,12 +29,12 @@ class SuperGaussianScore(NonlinearityTemplate):
         Returns
         -------
         np.ndarray
-            ``2 * tanh(y)``.
+            ``-2 * tanh(y)``.
         """
-        return 2.0 * np.tanh(y)
+        return -2.0 * np.tanh(y)
 
     def derivative(self, y: np.ndarray) -> np.ndarray:
-        """``g_+'(y) = 2 (1 - tanh^2(y))``.
+        """``g_+'(y) = -2 (1 - tanh^2(y))``.
 
         Parameters
         ----------
@@ -40,21 +44,18 @@ class SuperGaussianScore(NonlinearityTemplate):
         Returns
         -------
         np.ndarray
-            ``2 * (1 - tanh(y)**2)``.
+            ``-2 * (1 - tanh(y)**2)``.
         """
-        return 2.0 * (1.0 - np.tanh(y) ** 2)
+        return -2.0 * (1.0 - np.tanh(y) ** 2)
 
     def log_density(self, y: np.ndarray) -> np.ndarray:
-        """``log p_+(y) = -log(2) - 2 log(cosh(y))``, a antiderivada exata de ``-g_+``.
+        """``log p_+(y) = -log(2) - 2 log(cosh(y))``, a antiderivada exata de ``g_+``.
 
         Calculada de forma numericamente estavel via
-        ``log(cosh(y)) = logaddexp(y, -y) - log(2)``. Diferente do caso
-        subgaussiano (ver
-        :meth:`SubGaussianScore.log_density
-        <ica.nonlinearities.subgaussian.SubGaussianScore.log_density>`),
-        esta e uma densidade de probabilidade propriamente normalizada
-        (``integral exp(log_density) = 1``): e a densidade da
-        distribuicao logistica padrao, verificado numericamente.
+        ``log(cosh(y)) = logaddexp(y, -y) - log(2)``. E uma densidade de
+        probabilidade propriamente normalizada (``integral exp(log_density) =
+        1``): e a densidade da distribuicao logistica padrao, verificado
+        numericamente.
 
         Parameters
         ----------

@@ -1,7 +1,4 @@
-"""Visualizacao qualitativa de audio: forma de onda, espectrograma e exportacao das fontes.
-
-Ver context/TASK_DESCRIPTION.md ("inteligibilidade dos audios separados").
-"""
+"""Visualizacao qualitativa de audio: forma de onda, espectrograma e exportacao das fontes."""
 
 from __future__ import annotations
 

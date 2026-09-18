@@ -1,7 +1,4 @@
-"""Interface base para passos de pre-processamento encadeaveis.
-
-Ver context/DEVELOPMENT_GUIDELINES.md, Secao 2.2.
-"""
+"""Interface base para passos de pre-processamento encadeaveis."""
 
 from abc import ABC, abstractmethod
 
@@ -26,14 +23,14 @@ class PreprocessingStep(ABC):
         (que recupera as fontes finais a partir dos dados originais)
         quanto por
         :meth:`~ica.preprocessing.pipeline.Pipeline.compose_linear_matrix`
-        (usado para ``full_unmixing_matrix_``). ``False`` por padrao.
-        Usado por
-        :class:`~ica.preprocessing.temporal_filtering.TemporalFiltering`
-        (livro-texto, Secao 13.1, p.263-267): a filtragem melhora a
-        estimacao de B, mas nao deve encurtar nem alterar o sinal final
-        recuperado -- "we can use the filtered data in the ICA estimating
-        method only. After estimating the mixing matrix, we can apply the
-        same mixing matrix on the original data".
+        (usado para ``full_unmixing_matrix_``). ``False`` por padrao --
+        nenhum passo do pipeline padrao o usa hoje; existe como gancho
+        generico para um futuro passo que so deva ajudar a *estimar* B
+        (ex.: uma filtragem temporal, livro-texto Secao 13.1, p.263-267)
+        sem afetar a reconstrucao final das fontes -- "we can use the
+        filtered data in the ICA estimating method only. After estimating
+        the mixing matrix, we can apply the same mixing matrix on the
+        original data".
     linear_matrix_ : np.ndarray or None
         Matriz linear equivalente deste passo no espaco de misturas
         (canais), usada por
@@ -41,10 +38,8 @@ class PreprocessingStep(ABC):
         para construir ``full_unmixing_matrix_`` independentemente da
         ordem em que os passos concretos aparecem no pipeline. ``None``
         por padrao -- passos afins
-        (:class:`~ica.preprocessing.centering.Centering`) ou que atuam no
-        eixo do tempo em vez do eixo dos canais
-        (:class:`~ica.preprocessing.temporal_filtering.TemporalFiltering`)
-        nao contribuem. Sobrescrita por passos que de fato representam
+        (:class:`~ica.preprocessing.centering.Centering`) ou marcados
+        ``estimation_only`` nao contribuem. Sobrescrita por passos que de fato representam
         uma transformacao linear no espaco de canais (ex.: ``Whitening``,
         ``PCA``).
     """

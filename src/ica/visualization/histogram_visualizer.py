@@ -1,7 +1,4 @@
-"""Visualizacao qualitativa de distribuicoes: histogramas com referencia gaussiana.
-
-Ver context/TASK_DESCRIPTION.md ("forma dos histogramas reconstruidos").
-"""
+"""Visualizacao qualitativa de distribuicoes: histogramas com referencia gaussiana."""
 
 from __future__ import annotations
 

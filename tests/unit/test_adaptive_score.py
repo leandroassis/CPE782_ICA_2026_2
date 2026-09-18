@@ -1,4 +1,4 @@
-"""Testes unitarios para AdaptiveScore (ICA_BACKGROUND.md, Secao 3.4)."""
+"""Testes unitarios para AdaptiveScore (skill ica-ml, Secao 5)."""
 
 import numpy as np
 
@@ -29,26 +29,24 @@ class _SpyNonlinearity(NonlinearityTemplate):
 
 
 def test_laplace_source_is_classified_as_supergaussian(rng, make_sources):
-    """Uma fonte Laplaciana (cauda pesada) deve ter gamma_i < 0 e usar g_+.
+    """Uma fonte Laplaciana (cauda pesada) deve ter m_i > 0 e usar g_+.
 
-    Direcao confirmada empiricamente em ICA_BACKGROUND.md, Secao 3.4:
-    gamma_i e o negativo da estatistica de chaveamento do Extended
-    Infomax (Lee, Girolami & Sejnowski, 1999), que e positiva para fontes
-    supergaussianas.
+    Chaveamento pelo momento nao-polinomial do livro (skill ica-ml, Secao
+    5): ``m_i = E{-tanh(y_i) y_i + (1 - tanh^2(y_i))}``, ``m_i > 0 -> super``.
     """
     y = make_sources(["laplace"], 20_000, rng)
     adaptive = AdaptiveScore()
     adaptive.score(y)
-    assert adaptive.gamma_[0] < 0
+    assert adaptive.m_[0] > 0
     assert adaptive.is_super_gaussian_[0]
 
 
 def test_uniform_source_is_classified_as_subgaussian(rng, make_sources):
-    """Uma fonte Uniforme (achatada) deve ter gamma_i > 0 e usar g_-."""
+    """Uma fonte Uniforme (achatada) deve ter m_i < 0 e usar g_-."""
     y = make_sources(["uniform"], 20_000, rng)
     adaptive = AdaptiveScore()
     adaptive.score(y)
-    assert adaptive.gamma_[0] > 0
+    assert adaptive.m_[0] < 0
     assert not adaptive.is_super_gaussian_[0]
 
 

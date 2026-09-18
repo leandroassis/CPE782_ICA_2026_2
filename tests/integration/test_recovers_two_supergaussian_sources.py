@@ -1,6 +1,6 @@
 """Teste de integracao: ICAModel completo recupera 2 fontes supergaussianas.
 
-Ver context/ICA_BACKGROUND.md, Secoes 2 e 4.2.
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secoes 2 e 6.
 """
 
 from ica.algorithms.natural_gradient import NaturalGradientICA

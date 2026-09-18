@@ -1,7 +1,4 @@
-"""Composicao encadeada de passos de pre-processamento.
-
-Ver context/DEVELOPMENT_GUIDELINES.md, Secao 2.2.
-"""
+"""Composicao encadeada de passos de pre-processamento."""
 
 import numpy as np
 
@@ -64,12 +61,11 @@ class Pipeline:
 
         Usa os parametros ja estimados por :meth:`fit_transform` (chama
         ``step.transform``, nunca ``step.fit``), pulando os passos com
-        ``estimation_only = True`` (ex.:
-        :class:`~ica.preprocessing.temporal_filtering.TemporalFiltering`).
-        Isso implementa a recomendacao do livro-texto (Secao 13.1, p.264):
-        a filtragem temporal so deve entrar na estimacao da matriz de
-        separacao B, nunca na reconstrucao final das fontes, que deve
-        partir dos dados originais para preservar sua forma/comprimento.
+        ``estimation_only = True`` -- gancho generico (ver
+        :attr:`~ica.preprocessing.base.PreprocessingStep.estimation_only`)
+        para um passo que so deva ajudar a estimar B, nunca entrar na
+        reconstrucao final das fontes, que deve partir dos dados originais
+        para preservar sua forma/comprimento.
 
         Parameters
         ----------

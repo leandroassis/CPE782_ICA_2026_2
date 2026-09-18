@@ -1,20 +1,22 @@
 """Fixtures compartilhadas: geracao de fontes sinteticas e avaliacao de recuperacao.
 
-Ver context/DEVELOPMENT_GUIDELINES.md, Secao 5: os testes usam fontes
-sinteticas com fundo de verdade conhecido (nunca os dados reais de
-``data/``, que nao tem matriz de mistura ``A`` disponivel), e comparam
-recuperacao por correlacao maxima -- nao por igualdade direta -- para
-respeitar as ambiguidades de escala/sinal/permutacao (ICA_BACKGROUND.md,
-Secao 1.3).
+Os testes usam fontes sinteticas com fundo de verdade conhecido (os dados
+reais em ``data/mix/`` sao usados so em testes dedicados, contra o gabarito
+real em ``data/groundtruth/``), e comparam recuperacao por correlacao
+maxima -- nao por igualdade direta -- para respeitar as ambiguidades de
+escala/sinal/permutacao (skill ``ica-ml``, Secao 1).
 """
 
 from pathlib import Path
 
 import numpy as np
 import pytest
-from scipy.optimize import linear_sum_assignment
 
 from ica.data.base import DataTemplate
+from ica.interfaces import SignalMatrix
+from ica.postprocessing.matching import (
+    best_match_correlation as _postprocessing_best_match_correlation,
+)
 
 
 @pytest.fixture
@@ -30,8 +32,8 @@ class _ArrayDataTemplate(DataTemplate):
         super().__init__(run="synthetic", data_root=Path("."))
         self._X = X
 
-    def load(self) -> np.ndarray:
-        return self._X
+    def load(self) -> SignalMatrix:
+        return SignalMatrix(data=self._X, domain="distribution", meta={})
 
     @property
     def n_mixtures(self) -> int:
@@ -119,6 +121,9 @@ def make_mixing_matrix():
 def best_match_correlation():
     """Fabrica da metrica de recuperacao invariante a escala/sinal/permutacao.
 
+    Fino wrapper sobre :func:`ica.postprocessing.matching.best_match_correlation`
+    -- a logica de casamento hungaro vive la (producao), nao aqui.
+
     Returns
     -------
     callable
@@ -129,14 +134,4 @@ def best_match_correlation():
         indica recuperacao bem-sucedida, independentemente de reordenacao,
         troca de sinal ou reescala das componentes.
     """
-
-    def _best_match_correlation(S_true: np.ndarray, S_hat: np.ndarray) -> float:
-        n = S_true.shape[0]
-        absolute_correlation = np.zeros((n, n))
-        for i in range(n):
-            for j in range(n):
-                absolute_correlation[i, j] = abs(np.corrcoef(S_true[i], S_hat[j])[0, 1])
-        row_ind, col_ind = linear_sum_assignment(-absolute_correlation)
-        return float(absolute_correlation[row_ind, col_ind].mean())
-
-    return _best_match_correlation
+    return _postprocessing_best_match_correlation

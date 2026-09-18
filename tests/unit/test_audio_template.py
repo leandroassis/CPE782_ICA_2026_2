@@ -1,10 +1,11 @@
-"""Testes unitarios para AudioTemplate (DEVELOPMENT_GUIDELINES.md, Secao 2.1).
+"""Testes unitarios para AudioTemplate.
 
 Usa arquivos ``.wav`` sinteticos em ``tmp_path``, no formato real de
-``data/audio/``, nunca os dados reais do trabalho.
+``data/mix/audio/``, nunca os dados reais do trabalho.
 """
 
 import numpy as np
+import pandas as pd
 import pytest
 from scipy.io import wavfile
 
@@ -19,15 +20,16 @@ def _write_wav(path, n_samples=100, sample_rate=44100, amplitude=1000):
 
 
 def test_load_returns_one_row_per_mixture_file(tmp_path):
-    """load() deve retornar uma linha por arquivo mixture_*.wav, na ordem numerica."""
+    """load() deve retornar um SignalMatrix com uma linha por mixture_*.wav, ordem numerica."""
     run_dir = tmp_path / "run1"
     _write_wav(run_dir / "mixture_1.wav", n_samples=200)
     _write_wav(run_dir / "mixture_2.wav", n_samples=200)
 
     template = AudioTemplate(run="run1", data_root=tmp_path)
-    X = template.load()
+    signal_matrix = template.load()
 
-    assert X.shape == (2, 200)
+    assert signal_matrix.data.shape == (2, 200)
+    assert signal_matrix.domain == "audio"
 
 
 def test_n_mixtures_reflects_two_vs_three_files(tmp_path):
@@ -51,10 +53,10 @@ def test_load_normalizes_to_unit_range(tmp_path):
     _write_wav(run_dir / "mixture_1.wav", amplitude=32000)
 
     template = AudioTemplate(run="run1", data_root=tmp_path)
-    X = template.load()
+    signal_matrix = template.load()
 
-    assert X.max() <= 1.0
-    assert X.min() >= -1.0
+    assert signal_matrix.data.max() <= 1.0
+    assert signal_matrix.data.min() >= -1.0
 
 
 def test_sample_rate_is_preserved(tmp_path):
@@ -111,3 +113,29 @@ def test_discover_runs_finds_directories_with_mixture_files(tmp_path):
     (tmp_path / "not_a_run").mkdir()
 
     assert AudioTemplate.discover_runs(tmp_path) == ["run1"]
+
+
+def test_load_ground_truth_returns_none_when_run_missing(tmp_path):
+    """load_ground_truth deve tolerar a ausencia do diretorio de gabarito."""
+    template = AudioTemplate(run="run1", data_root=tmp_path)
+    mixing_matrix_true, sources_true = template.load_ground_truth(tmp_path / "does_not_exist")
+    assert mixing_matrix_true is None
+    assert sources_true is None
+
+
+def test_load_ground_truth_reads_mix_matrix_and_sources(tmp_path):
+    """load_ground_truth deve ler mix_matrix*.csv e source_*.wav, normalizando as fontes."""
+    groundtruth_run_dir = tmp_path / "groundtruth" / "run1"
+    groundtruth_run_dir.mkdir(parents=True)
+    pd.DataFrame({"A1": [1.0, 0.0], "A2": [0.0, 1.0]}).to_csv(
+        groundtruth_run_dir / "mix_matrix.csv", index=False
+    )
+    _write_wav(groundtruth_run_dir / "source_1.wav", n_samples=100, amplitude=16000)
+    _write_wav(groundtruth_run_dir / "source_2.wav", n_samples=100, amplitude=16000)
+
+    template = AudioTemplate(run="run1", data_root=tmp_path / "mix")
+    mixing_matrix_true, sources_true = template.load_ground_truth(tmp_path / "groundtruth")
+
+    assert mixing_matrix_true.shape == (2, 2)
+    assert sources_true.shape == (2, 100)
+    assert sources_true.max() <= 1.0 and sources_true.min() >= -1.0

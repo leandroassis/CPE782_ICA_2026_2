@@ -1,56 +1,36 @@
 """Interface de linha de comando: ``python -m ica --sample ... --run ...``.
 
-Ver justfile (``just run``) e context/DEVELOPMENT_GUIDELINES.md, Secao 8.
+Roda a grade completa de uma celula (``ica.harness.grid``) por
+``(sample, run)`` -- os 3 algoritmos de ICA-ML x os modos de
+condicionamento aplicaveis (``.claude/PIPELINE_MAP.md``) --, escolhe o
+vencedor (``ica.harness.selection``, skill ica-evaluation Secao 5) e gera a
+figura-vitrine dele. ``--algorithm`` continua disponivel como atalho para
+depurar uma unica celula (todos os modos aplicaveis desse algoritmo), fora
+da grade completa.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 from pathlib import Path
+from typing import Any
 
-from ica.algorithms.base import ICAAlgorithm
-from ica.algorithms.bell_sejnowski import BellSejnowskiICA
-from ica.algorithms.fastica_ml import FastICAML
-from ica.algorithms.natural_gradient import NaturalGradientICA
+import numpy as np
+
 from ica.data.audio_template import AudioTemplate
 from ica.data.base import DataTemplate
 from ica.data.distribution_template import DistributionTemplate
 from ica.data.image_template import ImageTemplate
-from ica.metrics.convergence_iterations import ConvergenceIterations
-from ica.metrics.execution_time import ExecutionTime
-from ica.metrics.log_likelihood import LogLikelihood
-from ica.metrics.non_gaussianity import NonGaussianityScore
-from ica.model import ICAModel
-from ica.nonlinearities.adaptive import AdaptiveScore
-from ica.nonlinearities.subgaussian import SubGaussianScore
-from ica.nonlinearities.supergaussian import SuperGaussianScore
-from ica.preprocessing.centering import Centering
-from ica.preprocessing.pipeline import Pipeline
-from ica.preprocessing.whitening import Whitening
-from ica.visualization.audio_visualizer import AudioVisualizer
-from ica.visualization.histogram_visualizer import HistogramVisualizer
-from ica.visualization.image_visualizer import ImageVisualizer
-from ica.visualization.log_likelihood_visualizer import LogLikelihoodVisualizer
-from ica.visualization.mixing_diagram_3d_visualizer import MixingDiagram3DVisualizer
-from ica.visualization.mixing_diagram_visualizer import MixingDiagramVisualizer
+from ica.harness.grid import ALGORITHMS, CellResult, conditioning_modes, run_cell, run_grid
+from ica.harness.selection import select_best
+from ica.visualization.showcase_visualizer import ShowcaseVisualizer
 
-_TEMPLATE_FACTORIES = {
+_TEMPLATE_FACTORIES: dict[str, type[DataTemplate]] = {
     "imagens": ImageTemplate,
     "dist": DistributionTemplate,
     "audio": AudioTemplate,
-}
-
-_ALGORITHM_FACTORIES = {
-    "bell_sejnowski": BellSejnowskiICA,
-    "natural_gradient": NaturalGradientICA,
-    "fastica_ml": FastICAML,
-}
-
-_NONLINEARITY_FACTORIES = {
-    "super": SuperGaussianScore,
-    "sub": SubGaussianScore,
-    "adaptive": AdaptiveScore,
 }
 
 
@@ -60,114 +40,96 @@ def _build_parser() -> argparse.ArgumentParser:
     Returns
     -------
     argparse.ArgumentParser
-        Parser configurado com as opcoes documentadas em
-        DEVELOPMENT_GUIDELINES.md, Secao 8.
+        Parser configurado.
     """
     parser = argparse.ArgumentParser(
         prog="python -m ica",
-        description="Separacao Cega de Fontes via ICA (Infomax / Maxima Verossimilhanca).",
+        description=(
+            "Separacao Cega de Fontes via ICA-ML: roda a grade de algoritmos x "
+            "modos de condicionamento sobre um run e mostra a melhor separacao."
+        ),
     )
     parser.add_argument("--sample", choices=sorted(_TEMPLATE_FACTORIES), required=True)
     parser.add_argument("--run")
     parser.add_argument("--sample-size", type=int, default=None)
-    parser.add_argument("--algorithm", choices=sorted(_ALGORITHM_FACTORIES), default="fastica_ml")
     parser.add_argument(
-        "--nonlinearity", choices=sorted(_NONLINEARITY_FACTORIES), default="adaptive"
+        "--algorithm",
+        choices=sorted(ALGORITHMS),
+        default=None,
+        help="Roda so este algoritmo (todos os modos aplicaveis), fora da grade completa.",
     )
-    parser.add_argument("--learning-rate", type=float, default=None)
     parser.add_argument("--max-iterations", type=int, default=500)
     parser.add_argument("--tolerance", type=float, default=1e-6)
-    parser.add_argument("--data-root", type=Path, default=Path("data"))
+    parser.add_argument("--data-root", type=Path, default=Path("data/mix"))
+    parser.add_argument(
+        "--groundtruth-root",
+        type=Path,
+        default=None,
+        help="Por padrao, o irmao 'groundtruth' de --data-root (data/mix -> data/groundtruth).",
+    )
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--max-workers", type=int, default=None)
     parser.add_argument("--list-runs", action="store_true")
     return parser
 
 
-def _build_data_template(args: argparse.Namespace, type_root: Path) -> DataTemplate:
-    """Instancia o DataTemplate correspondente a ``--sample``.
+def _serialize(value: Any) -> Any:
+    """Converte o valor de uma metrica para algo serializavel em JSON.
+
+    Trata ``np.ndarray``/``np.floating``/``np.integer``, dataclasses
+    (recursivamente, por campo), listas/tuplas/dicionarios e ``float``
+    nao-finito (``inf``/``nan`` -> string).
 
     Parameters
     ----------
-    args : argparse.Namespace
-        Argumentos ja parseados.
-    type_root : pathlib.Path
-        Diretorio raiz das amostras deste tipo (``data_root/sample``).
+    value : Any
+        Valor devolvido por ``Metric.compute`` (ou aninhado dentro dele).
 
     Returns
     -------
-    DataTemplate
-        Carregador configurado para o run pedido.
+    Any
+        Estrutura pronta para ``json.dumps``.
     """
-    if args.sample == "dist":
-        return DistributionTemplate(
-            run=args.run, data_root=type_root, sample_size=args.sample_size
-        )
-    return _TEMPLATE_FACTORIES[args.sample](run=args.run, data_root=type_root)
+    if value is None:
+        return None
+    if isinstance(value, np.ndarray):
+        return _serialize(value.tolist())
+    if isinstance(value, np.floating | np.integer):
+        return value.item()
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {
+            field.name: _serialize(getattr(value, field.name))
+            for field in dataclasses.fields(value)
+        }
+    if isinstance(value, list | tuple):
+        return [_serialize(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _serialize(item) for key, item in value.items()}
+    if isinstance(value, float) and not np.isfinite(value):
+        return str(value)
+    return value
 
 
-def _build_algorithm(args: argparse.Namespace) -> ICAAlgorithm:
-    """Instancia o ICAAlgorithm e a NonlinearityTemplate pedidos por linha de comando.
-
-    O ``learning_rate`` so e repassado ao algoritmo quando informado
-    explicitamente pelo usuario -- caso contrario, prevalece o default
-    proprio de cada classe concreta de ``ICAAlgorithm`` (ex.:
-    ``NaturalGradientICA`` usa um default mais conservador por
-    estabilidade numerica, ver ICA_BACKGROUND.md, Secao 4.2).
-
-    Parameters
-    ----------
-    args : argparse.Namespace
-        Argumentos ja parseados.
-
-    Returns
-    -------
-    ICAAlgorithm
-        Algoritmo configurado, com a nao-linearidade injetada.
-    """
-    nonlinearity = _NONLINEARITY_FACTORIES[args.nonlinearity]()
-    algorithm_cls = _ALGORITHM_FACTORIES[args.algorithm]
-    kwargs = {
-        "nonlinearity": nonlinearity,
-        "max_iterations": args.max_iterations,
-        "tolerance": args.tolerance,
+def _numeric_metrics(metrics: dict[str, Any]) -> dict[str, float]:
+    """Filtra ``metrics`` para so os valores numericos escalares (para escrever na figura)."""
+    return {
+        name: float(value)
+        for name, value in metrics.items()
+        if isinstance(value, int | float | np.floating) and np.isfinite(value)
     }
-    if args.learning_rate is not None:
-        kwargs["learning_rate"] = args.learning_rate
-    return algorithm_cls(**kwargs)
 
 
-def _build_visualizers(sample: str, data: DataTemplate) -> list:
-    """Escolhe os Visualizer apropriados para o tipo de amostra.
+def _showcase_data(sample: str, run: str, data_root: Path, winner: CellResult) -> Any:
+    """Escolhe o objeto ``data`` a passar ao ``ShowcaseVisualizer`` para a celula vencedora.
 
-    Parameters
-    ----------
-    sample : str
-        Um de ``"imagens"``, ``"dist"``, ``"audio"``.
-    data : DataTemplate
-        Carregador ja usado no ajuste do modelo (reutilizado por
-        visualizadores que precisam reconstruir/exportar, ex.:
-        ``ImageVisualizer``, ``AudioVisualizer``).
-
-    Returns
-    -------
-    list of Visualizer
-        Visualizadores a executar, sempre incluindo
-        ``MixingDiagramVisualizer`` (informativo mesmo sem matriz de
-        mistura verdadeira), ``MixingDiagram3DVisualizer`` (no-op quando
-        nao ha exatamente 3 componentes) e ``LogLikelihoodVisualizer``.
+    Para o modo A (unico fit, imagem/audio) reaproveita ``winner.model.data``
+    (ja carregado); para os modos B/C de imagem (fits em cima de matrizes em
+    memoria, sem ``reconstruct``) reconstroi um ``ImageTemplate`` real,
+    apontado para o mesmo run em disco.
     """
-    visualizers = [
-        MixingDiagramVisualizer(),
-        MixingDiagram3DVisualizer(),
-        LogLikelihoodVisualizer(),
-    ]
-    if sample == "imagens":
-        visualizers.append(ImageVisualizer(data=data))
-    elif sample == "dist":
-        visualizers.append(HistogramVisualizer())
-    elif sample == "audio":
-        visualizers.append(AudioVisualizer(data=data))
-    return visualizers
+    if sample == "imagens" and winner.mode in ("B", "C"):
+        return ImageTemplate(run=run, data_root=data_root / sample)
+    return winner.model.data
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -185,10 +147,15 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.groundtruth_root is None:
+        # Segue --data-root: "data/mix" -> "data/groundtruth" (irmaos). Nunca
+        # cai de volta num caminho fixo, para nao ler gabarito de outro lugar
+        # quando --data-root e sobrescrito (ex.: testes com tmp_path).
+        args.groundtruth_root = args.data_root.parent / "groundtruth"
 
-    type_root = args.data_root / args.sample
+    sample_data_root = args.data_root / args.sample
     template_cls = _TEMPLATE_FACTORIES[args.sample]
-    available_runs = template_cls.discover_runs(type_root)
+    available_runs = template_cls.discover_runs(sample_data_root)
 
     if args.list_runs:
         for run in available_runs:
@@ -203,31 +170,87 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--run e obrigatorio (use --list-runs para ver os runs disponiveis).")
     if args.run not in available_runs:
         parser.error(
-            f"Run {args.run!r} nao encontrado em {type_root}. Disponiveis: {available_runs}."
+            f"Run {args.run!r} nao encontrado em {sample_data_root}. Disponiveis: {available_runs}."
         )
 
-    data = _build_data_template(args, type_root)
-    pipeline = Pipeline([Centering(), Whitening()])
-    algorithm = _build_algorithm(args)
+    groundtruth_root = args.groundtruth_root / args.sample
+    algorithm_kwargs = {"max_iterations": args.max_iterations, "tolerance": args.tolerance}
 
-    model = ICAModel(data=data, pipeline=pipeline, algorithm=algorithm)
-    model.fit()
+    if args.algorithm is not None:
+        if args.sample == "dist":
+            probe_data = template_cls(
+                run=args.run, data_root=sample_data_root, sample_size=args.sample_size
+            )
+        else:
+            probe_data = template_cls(run=args.run, data_root=sample_data_root)
+        modes = conditioning_modes(args.sample, probe_data)
+        cells = [
+            run_cell(
+                args.sample,
+                args.run,
+                args.algorithm,
+                mode,
+                sample_data_root,
+                groundtruth_root,
+                args.sample_size,
+                **algorithm_kwargs,
+            )
+            for mode in modes
+        ]
+    else:
+        cells = run_grid(
+            args.sample,
+            args.run,
+            sample_data_root,
+            groundtruth_root,
+            args.sample_size,
+            max_workers=args.max_workers,
+            **algorithm_kwargs,
+        )
+
+    winner = select_best(cells)
 
     output_dir = args.output_dir or Path("output") / args.sample / args.run
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    metrics = model.evaluate(
-        [ConvergenceIterations(), ExecutionTime(), NonGaussianityScore(), LogLikelihood()]
-    )
-    serializable_metrics = {
-        name: value.tolist() if hasattr(value, "tolist") else value
-        for name, value in metrics.items()
+    all_metrics = {f"{cell.algorithm}/{cell.mode}": _serialize(cell.metrics) for cell in cells}
+    (output_dir / "metrics.json").write_text(json.dumps(all_metrics, indent=2))
+
+    winner_summary = {
+        "algorithm": winner.algorithm,
+        "mode": winner.mode,
+        "log_likelihood_per_sample": winner.log_likelihood_per_sample,
     }
-    (output_dir / "metrics.json").write_text(json.dumps(serializable_metrics, indent=2))
-    for name, value in serializable_metrics.items():
+    (output_dir / "winner.json").write_text(json.dumps(winner_summary, indent=2))
+    print(
+        f"Vencedor: {winner.algorithm}/{winner.mode} "
+        f"(log-L/amostra={winner.log_likelihood_per_sample:.4f})"
+    )
+    for name, value in all_metrics.items():
         print(f"{name}: {value}")
 
-    for visualizer in _build_visualizers(args.sample, data):
-        visualizer.plot(model, output_dir)
+    visualizer = ShowcaseVisualizer(
+        data=_showcase_data(args.sample, args.run, args.data_root, winner),
+        metrics=_numeric_metrics(winner.metrics),
+    )
+    if winner.rgb_composites is not None:
+        image_data = ImageTemplate(run=args.run, data_root=sample_data_root)
+        image_data.load()  # popula height_/width_
+        true_composites = None
+        if groundtruth_root.exists():
+            _, sources_true = image_data.load_ground_truth(groundtruth_root)
+            if sources_true is not None:
+                true_composites = [
+                    sources_true[3 * i : 3 * i + 3] for i in range(sources_true.shape[0] // 3)
+                ]
+        visualizer.plot_rgb_composites(
+            winner.rgb_composites,
+            height=image_data.height_ or 0,
+            width=image_data.width_ or 0,
+            output_dir=output_dir,
+            true_composites=true_composites,
+        )
+    else:
+        visualizer.plot(winner.model, output_dir)
 
     return 0

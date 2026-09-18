@@ -1,7 +1,6 @@
 """Visualizacao 3D: nuvem de pontos das misturas e das fontes recuperadas.
 
-Ver context/TASK_DESCRIPTION.md ("diagramas de mistura"). Generaliza para
-n=3 os diagramas 2D de ICA_BACKGROUND.md, Secao 1 (Figs. 7.5-7.9: as
+Generaliza para n=3 os diagramas 2D (livro-texto, Figs. 7.5-7.9: as
 misturas formam uma nuvem correlacionada -- paralelepipedo/losango --
 enquanto as fontes recuperadas, sendo independentes, formam uma nuvem
 alinhada aos eixos). So produz saida quando ha exatamente 3

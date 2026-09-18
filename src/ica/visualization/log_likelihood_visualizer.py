@@ -1,7 +1,7 @@
 """Visualizacao de convergencia: log-verossimilhanca media a cada iteracao.
 
-Ver context/ICA_BACKGROUND.md, Secao 3.2; context/TASK_DESCRIPTION.md
-("quantidade de iteracoes necessarias para convergir").
+Ver ``.claude/skills/ica-ml/SKILL.md``, Secao 2 (log-verossimilhanca) e
+Secao 7 (convergencia).
 """
 
 from __future__ import annotations

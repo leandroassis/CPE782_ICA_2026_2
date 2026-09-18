@@ -1,4 +1,4 @@
-"""Testes unitarios para FastICAML (ICA_BACKGROUND.md, Secao 4.3)."""
+"""Testes unitarios para FastICAML (skill ica-ml, Secao 6; references/algorithms.md)."""
 
 import numpy as np
 
@@ -12,9 +12,10 @@ from ica.preprocessing.whitening import Whitening
 def test_update_step_matches_closed_form():
     """_update_step deve seguir o ponto fixo em bloco + ortogonalizacao simetrica.
 
-    Valores de referencia (alpha_i, beta_i e o resultado final apos
-    ortogonalizar) calculados independentemente a partir da formula
-    (ICA_BACKGROUND.md, Secao 4.3), nao lidos de volta do proprio metodo.
+    Valores de referencia (beta_i = -E{y_i g(y_i)}, alpha_i =
+    -1/(beta_i+E{g'(y_i)}) e o resultado final apos ortogonalizar)
+    calculados independentemente a partir da formula do livro (skill
+    ica-ml, eq. 9.24-9.25), nao lidos de volta do proprio metodo.
     """
     B = np.array([[1.0, 0.2], [-0.1, 1.0]])
     X = np.array([[1.0, -2.0, 0.5, 3.0], [0.5, 1.0, -1.5, 2.0]])
@@ -23,7 +24,7 @@ def test_update_step_matches_closed_form():
     result = algorithm._update_step(B, X)
 
     expected = np.array(
-        [[0.4885439546, 0.129250794], [-0.2907870831, 0.7729396137]]
+        [[0.56847629, -0.27372116], [-0.00818746, 0.73431474]]
     )
     assert np.allclose(result, expected, atol=1e-8)
 
@@ -59,7 +60,7 @@ def test_recovers_two_laplace_sources_quickly(
 
 
 def test_log_likelihood_is_non_decreasing(rng, make_sources, make_mixing_matrix):
-    """A log-verossimilhanca media (ICA_BACKGROUND.md, Secao 3.2) deve crescer a cada iteracao."""
+    """A log-verossimilhanca media (skill ica-ml, Secao 2) deve crescer a cada iteracao."""
     S = make_sources(["laplace", "laplace"], 3000, rng)
     A = make_mixing_matrix(rng, 2)
     X = A @ S
@@ -77,9 +78,9 @@ def test_log_likelihood_is_non_decreasing(rng, make_sources, make_mixing_matrix)
 def test_learning_rate_is_ignored():
     """FastICAML e livre de taxa de aprendizado -- o parametro e aceito mas nao usado.
 
-    Documenta explicitamente a excecao registrada em ICA_BACKGROUND.md,
-    Secao 4.3/4.4 ("Livre de taxa mu"): duas instancias com
-    ``learning_rate`` diferentes devem produzir o mesmo resultado.
+    Documenta explicitamente a excecao registrada na skill ica-ml
+    ("Livre de mu"): duas instancias com ``learning_rate`` diferentes devem
+    produzir o mesmo resultado.
     """
     X = np.array([[1.0, -2.0, 0.5, 3.0, -0.2], [0.5, 1.0, -1.5, 2.0, 0.7]])
     nonlinearity = SuperGaussianScore()

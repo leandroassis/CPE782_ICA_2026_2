@@ -1,7 +1,4 @@
-"""Interface base para visualizacoes qualitativas/quantitativas de um ICAModel ajustado.
-
-Ver context/DEVELOPMENT_GUIDELINES.md, Secao 2.6; context/TASK_DESCRIPTION.md.
-"""
+"""Interface base para visualizacoes qualitativas/quantitativas de um ICAModel ajustado."""
 
 from __future__ import annotations
 
