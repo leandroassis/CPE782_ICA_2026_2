@@ -32,6 +32,7 @@ _ASYMMETRIC_FAMILIES = {
     "rayleigh": stats.rayleigh,
     "qui-quadrado": stats.chi2,
 }
+_ALL_FAMILIES = {**_SYMMETRIC_FAMILIES, **_ASYMMETRIC_FAMILIES}
 
 
 @dataclass
@@ -53,11 +54,21 @@ class FamilyIdentificationResult:
         Melhor e segunda-melhor familia por bondade de ajuste (menor KS).
     ranking : list of FamilyFitResult
         Todas as 6 candidatas, ordenadas por KS crescente.
+    mean, std : float
+        Media/desvio-padrao de ``y`` usados para padronizar antes do
+        ajuste -- necessarios para reconstruir a densidade em escala
+        original (:func:`family_pdf`).
+    sign : float
+        Sinal (``+-1``) aplicado antes de ajustar as familias assimetricas
+        (fixado pela assimetria de ``y`` padronizado).
     """
 
     best: FamilyFitResult
     runner_up: FamilyFitResult
     ranking: list[FamilyFitResult]
+    mean: float
+    std: float
+    sign: float
 
 
 def identify_family(y: np.ndarray) -> FamilyIdentificationResult:
@@ -78,7 +89,8 @@ def identify_family(y: np.ndarray) -> FamilyIdentificationResult:
     FamilyIdentificationResult
         Melhor, segunda-melhor e o ranking completo.
     """
-    standardized = (y - y.mean()) / y.std()
+    mean, std = float(y.mean()), float(y.std())
+    standardized = (y - mean) / std
     sign = 1.0 if stats.skew(standardized) >= 0 else -1.0
     sign_fixed = sign * standardized
 
@@ -89,7 +101,43 @@ def identify_family(y: np.ndarray) -> FamilyIdentificationResult:
         fits.append(_fit_family(name, distribution, sign_fixed))
 
     ranking = sorted(fits, key=lambda fit: fit.ks_statistic)
-    return FamilyIdentificationResult(best=ranking[0], runner_up=ranking[1], ranking=ranking)
+    return FamilyIdentificationResult(
+        best=ranking[0], runner_up=ranking[1], ranking=ranking, mean=mean, std=std, sign=sign
+    )
+
+
+def family_pdf(
+    result: FamilyIdentificationResult, x: np.ndarray, fit: FamilyFitResult | None = None
+) -> np.ndarray:
+    """Densidade do ajuste (``fit`` ou ``result.best``) avaliada em ``x``, na escala original.
+
+    As familias simetricas foram ajustadas sobre ``(y - mean) / std``; as
+    assimetricas sobre ``sign * (y - mean) / std`` (exigem suporte
+    positivo). Muda de variavel para devolver a densidade na escala de
+    ``y``: ``f_Y(x) = f_Z(z) / std``, com ``z`` a mesma transformacao usada
+    no ajuste (``|sign| = 1`` nao afeta o jacobiano).
+
+    Parameters
+    ----------
+    result : FamilyIdentificationResult
+        Resultado de :func:`identify_family` sobre o sinal ``y`` de interesse.
+    x : np.ndarray
+        Pontos, na escala original de ``y``, onde avaliar a densidade.
+    fit : FamilyFitResult, optional
+        Por padrao, ``result.best``; passe ``result.runner_up`` (ou
+        qualquer entrada de ``result.ranking``) para plotar outra candidata.
+
+    Returns
+    -------
+    np.ndarray
+        Densidade avaliada em ``x``, mesma shape.
+    """
+    fit = fit or result.best
+    distribution = _ALL_FAMILIES[fit.name]
+    z = (x - result.mean) / result.std
+    if fit.name in _ASYMMETRIC_FAMILIES:
+        z = result.sign * z
+    return distribution.pdf(z, *fit.parameters) / result.std
 
 
 def _fit_family(name: str, distribution, data: np.ndarray) -> FamilyFitResult:

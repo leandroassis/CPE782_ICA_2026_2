@@ -337,7 +337,7 @@ def _run_image_conditioned_cell(
     rgb_composites = regroup_rgb_planes([m.sources_ for m in models])
     metrics: dict[str, Any] = {
         "convergence_iterations": [m.n_iterations_ for m in models],
-        "execution_time": sum(m.elapsed_time_ for m in models),
+        "execution_time_seconds": sum(m.elapsed_time_ for m in models),
         "log_likelihood": float(np.mean([m.log_likelihood_history_[-1] for m in models])),
     }
     if sources_true is not None:

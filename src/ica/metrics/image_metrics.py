@@ -22,7 +22,7 @@ _SSIM_K1 = 0.01
 _SSIM_K2 = 0.03
 
 
-def _min_max_normalize(image: np.ndarray) -> np.ndarray:
+def min_max_normalize(image: np.ndarray) -> np.ndarray:
     """Normaliza ``image`` para ``[0, 1]`` -- rescale de imagem da skill ica-evaluation."""
     minimum, maximum = image.min(), image.max()
     span = maximum - minimum if maximum > minimum else 1.0
@@ -121,7 +121,7 @@ def image_metrics_battery(
     order = np.argsort(match.reference_indices)
     results = []
     for i in order:
-        true_image = _min_max_normalize(
+        true_image = min_max_normalize(
             sources_true[match.reference_indices[i]].reshape(height, width)
         )
         estimated_image = sources_estimated[match.matched_indices[i]].reshape(height, width)

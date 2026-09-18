@@ -24,9 +24,17 @@ from ica.metrics.family_identification import (
     FamilyFitResult,
     FamilyIdentificationMetric,
     FamilyIdentificationResult,
+    family_pdf,
     identify_family,
 )
-from ica.metrics.image_metrics import PSNRMetric, SSIMMetric, image_metrics_battery, psnr, ssim
+from ica.metrics.image_metrics import (
+    PSNRMetric,
+    SSIMMetric,
+    image_metrics_battery,
+    min_max_normalize,
+    psnr,
+    ssim,
+)
 from ica.metrics.log_likelihood import LogLikelihood
 from ica.metrics.non_gaussianity import NonGaussianityScore
 from ica.metrics.sir_sdr import (
@@ -52,6 +60,7 @@ __all__ = [
     "SIRSDRMetric",
     "psnr",
     "ssim",
+    "min_max_normalize",
     "image_metrics_battery",
     "PSNRMetric",
     "SSIMMetric",
@@ -60,6 +69,7 @@ __all__ = [
     "DistributionFitQuality",
     "DistributionFitMetric",
     "identify_family",
+    "family_pdf",
     "FamilyFitResult",
     "FamilyIdentificationResult",
     "FamilyIdentificationMetric",
